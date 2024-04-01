@@ -6,11 +6,12 @@ import ast
 import ctypes
 import sys
 import tokenize
-from collections import deque
 from collections.abc import Callable, Generator, Iterable
 from io import StringIO
 from itertools import takewhile
 from typing import Generic, ParamSpec, TypeGuard, TypeVar
+
+from ._peekable import Peekable
 
 T = TypeVar("T")
 P = ParamSpec("P")
@@ -48,35 +49,6 @@ def _evaluate_late_binding(orig_locals: dict[str, object]) -> None:
 
 
 # === Token modification.
-
-
-class Peekable(Generic[T]):
-    # Implementation of this class is copied from https://github.com/mikeshardmind/discord-rolebot/blob/main/rolebot/encoder.py
-    # which is available under the MPL License here: https://github.com/mikeshardmind/discord-rolebot/blob/main/LICENSE
-
-    def __init__(self, iterable: Iterable[T]):
-        self._it = iter(iterable)
-        self._cache: deque[T] = deque()
-
-    def __iter__(self):
-        return self
-
-    def has_more(self) -> bool:
-        try:
-            self.peek()
-        except StopIteration:
-            return False
-        return True
-
-    def peek(self) -> T:
-        if not self._cache:
-            self._cache.append(next(self._it))
-        return self._cache[0]
-
-    def __next__(self) -> T:
-        if self._cache:
-            return self._cache.popleft()
-        return next(self._it)
 
 
 def _modify_tokens(tokens_iter: Iterable[tokenize.TokenInfo]) -> Generator[tokenize.TokenInfo, None, None]:

@@ -108,7 +108,6 @@ include = ["experimental"]
 ignore = ["tests"]
 pythonVersion = "3.10"
 typeCheckingMode = "strict"
-defineConstant = { DEBUG = true }
 
 reportPrivateUsage = "none"
 reportUnusedFunction = "none"

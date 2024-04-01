@@ -4,31 +4,34 @@ import ast
 import importlib.machinery
 import importlib.util
 import sys
-from importlib._bootstrap import _call_with_frames_removed  # type: ignore
+from collections.abc import Callable
+from importlib._bootstrap import _call_with_frames_removed  # type: ignore # Has to come from the source.
+from typing import TYPE_CHECKING, ClassVar, ParamSpec, Protocol, TypeAlias, TypeVar, cast
 
 from ._late_bound_arg_defaults_impl import _modify_ast, _modify_source, transform as transform_into_late_bound_defaults
 
-DEBUG = False
-
-if DEBUG:
+if TYPE_CHECKING:
     import os
     import types
-    from collections.abc import Callable
-    from typing import ClassVar, ParamSpec, Protocol, TypeAlias, TypeVar, cast
 
     from typing_extensions import Buffer, Self
-
-    T = TypeVar("T")
-    P = ParamSpec("P")
-
-    class _CurryProtocol(Protocol):
-        def __call__(self, func: Callable[P, T], *args: P.args, **kwargs: P.kwargs) -> T: ...
-
-    _call_with_frames_removed = cast(_CurryProtocol, _call_with_frames_removed)
 
     # Copied from _typeshed - they were marked as stable.
     ReadableBuffer: TypeAlias = Buffer
     StrPath: TypeAlias = str | os.PathLike[str]
+
+
+T = TypeVar("T")
+P = ParamSpec("P")
+
+
+class _CurryProtocol(Protocol):
+    def __call__(self, func: Callable[P, T], *args: P.args, **kwargs: P.kwargs) -> T: ...
+
+
+_call_with_frames_removed = cast(_CurryProtocol, _call_with_frames_removed)
+
+# TODO: Benchmark to see if removing as many annotation-related imports at runtime as possible makes a difference.
 
 __all__ = ("late_bound_arg_defaults",)
 
@@ -136,6 +139,7 @@ class _ExperimentalSourceFileLoader(importlib.machinery.SourceFileLoader):
 
 
 def install() -> None:
+    # TODO: Consider switching to meta path finder & loader. Hypothetically might run before pytest's.
     # Almost exactly the same as the default FileFinder hook, with one difference: the loader for source files.
     extensions = (importlib.machinery.ExtensionFileLoader, importlib.machinery.EXTENSION_SUFFIXES)
     source = (_ExperimentalSourceFileLoader, importlib.machinery.SOURCE_SUFFIXES)

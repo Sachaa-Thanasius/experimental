@@ -4,8 +4,9 @@ import ast
 import importlib.machinery
 import importlib.util
 import sys
+from importlib._bootstrap import _call_with_frames_removed  # type: ignore
 
-from ._late_bound_arg_defaults_impl import transform as transform_into_late_bound_defaults
+from ._late_bound_arg_defaults_impl import _modify_ast, _modify_source, transform as transform_into_late_bound_defaults
 
 DEBUG = False
 
@@ -13,29 +14,23 @@ if DEBUG:
     import os
     import types
     from collections.abc import Callable
-    from typing import ClassVar, ParamSpec, TypeAlias, TypeVar
+    from typing import ClassVar, ParamSpec, Protocol, TypeAlias, TypeVar, cast
 
     from typing_extensions import Buffer, Self
+
+    T = TypeVar("T")
+    P = ParamSpec("P")
+
+    class _CurryProtocol(Protocol):
+        def __call__(self, func: Callable[P, T], *args: P.args, **kwargs: P.kwargs) -> T: ...
+
+    _call_with_frames_removed = cast(_CurryProtocol, _call_with_frames_removed)
 
     # Copied from _typeshed - they were marked as stable.
     ReadableBuffer: TypeAlias = Buffer
     StrPath: TypeAlias = str | os.PathLike[str]
 
-    T = TypeVar("T")
-    P = ParamSpec("P")
-
 __all__ = ("late_bound_arg_defaults",)
-
-
-def _call_with_frames_removed(func: Callable[P, T], *args: P.args, **kwargs: P.kwargs) -> T:
-    """Calls a function while removing itself and that function call from tracebacks, should any be generated.
-
-    Notes
-    -----
-    This is a CPython-specific hack, I think. Probably will break at some point if a better mechanism is implemented.
-    """
-
-    return func(*args, **kwargs)
 
 
 class _ExperimentalFeature:
@@ -88,15 +83,31 @@ class _ExperimentalSourceFileLoader(importlib.machinery.SourceFileLoader):
         _optimize: int = -1,
     ) -> types.CodeType:
         # Get the AST for the importing module.
-        tree: ast.Module = _call_with_frames_removed(
-            compile,
-            data,
-            path,
-            "exec",
-            dont_inherit=True,
-            optimize=_optimize,
-            flags=ast.PyCF_ONLY_AST,
-        )
+
+        # TODO: Get rid of this hack somehow.
+        expect_late_bound_flag = False
+        try:
+            tree: ast.Module = _call_with_frames_removed(
+                compile,
+                data,
+                path,
+                "exec",
+                dont_inherit=True,
+                optimize=_optimize,
+                flags=ast.PyCF_ONLY_AST,
+            )
+        except SyntaxError:
+            data = _modify_source(importlib.util.decode_source(data))
+            expect_late_bound_flag = True
+            tree: ast.Module = _call_with_frames_removed(
+                compile,
+                data,
+                path,
+                "exec",
+                dont_inherit=True,
+                optimize=_optimize,
+                flags=ast.PyCF_ONLY_AST,
+            )
 
         # Check if the code imports anything from experimental.
         checker = _ExperimentalImportCollector()
@@ -108,7 +119,10 @@ class _ExperimentalSourceFileLoader(importlib.machinery.SourceFileLoader):
         if found_flags:
             # This needs special-casing since it performs a str to AST transform instead of an AST to AST one.
             if "late_bound_arg_defaults" in found_flags:
-                tree = late_bound_arg_defaults.transformer(ast.unparse(tree))
+                if expect_late_bound_flag:
+                    tree = _modify_ast(tree)
+                else:
+                    tree = late_bound_arg_defaults.transformer(ast.unparse(tree))
                 activated_features.add("late_bound_arg_defaults")
 
             # Assume any features made in the future will do pure AST transformation for now.
@@ -122,14 +136,13 @@ class _ExperimentalSourceFileLoader(importlib.machinery.SourceFileLoader):
 
 
 def install() -> None:
-    # Almost exactly the same as the default FileFinder hook on startup, with one difference: the loader for source files.
-
+    # Almost exactly the same as the default FileFinder hook, with one difference: the loader for source files.
     extensions = (importlib.machinery.ExtensionFileLoader, importlib.machinery.EXTENSION_SUFFIXES)
     source = (_ExperimentalSourceFileLoader, importlib.machinery.SOURCE_SUFFIXES)
     bytecode = (importlib.machinery.SourcelessFileLoader, importlib.machinery.BYTECODE_SUFFIXES)
 
-    # The FileFinder hook should always be the last one in theory.
+    # In theory, the FileFinder hook should always be the last one?
     sys.path_hooks[-1] = importlib.machinery.FileFinder.path_hook(extensions, source, bytecode)
 
-    # In theory, this needs to be reset for the new hook to take effect
+    # In theory, this needs to be reset for the new hook to take effect.
     sys.path_importer_cache.clear()

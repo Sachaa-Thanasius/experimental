@@ -1,3 +1,8 @@
+# Must be tested by installing `experimental` normally (not editable) and using the command
+# `python -m tests.pkg.late_bound_arg_defaults_loader_example`,
+# since pytest's ast transformer will attempt to do its work first and thus won't 
+# recognize the following as valid syntax.
+
 from experimental import late_bound_arg_defaults
 
 def example_func(
@@ -18,3 +23,6 @@ def test_call_after_experimental_load():
     assert b == [3, 3, 3]
     assert c == {"3": [3, 3, 3]}
     assert d == "2.0{'3': [3, 3, 3]}"
+
+if __name__ == "__main__":
+    raise SystemExit(test_call_after_experimental_load())

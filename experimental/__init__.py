@@ -76,7 +76,7 @@ class _ExperimentalImportCollector(ast.NodeVisitor):
         # TODO: Force more conditions on where the imports must be, e.g. at the top of a file after future imports.
         if node.module == "experimental" and node.level == 0:
             self.experimental_flags.update(alias.name for alias in node.names if alias.name[0] != "_")
-        return super().visit_ImportFrom(node)
+        return self.generic_visit(node)
 
 
 class _ExperimentalSourceFileLoader(importlib.machinery.SourceFileLoader):
@@ -106,7 +106,6 @@ class _ExperimentalSourceFileLoader(importlib.machinery.SourceFileLoader):
 
         # Apply transformations accordingly.
         if found_flags:
-            print(f"{'=' * 20}\n{found_flags=}\n{'=' * 20}\n")
             # This needs special-casing since it performs a str to AST transform instead of an AST to AST one.
             if "late_bound_arg_defaults" in found_flags:
                 tree = late_bound_arg_defaults.transformer(ast.unparse(tree))
@@ -131,7 +130,6 @@ def install() -> None:
 
     # The FileFinder hook should always be the last one in theory.
     sys.path_hooks[-1] = importlib.machinery.FileFinder.path_hook(extensions, source, bytecode)
-    print("added hook!")
 
     # In theory, this needs to be reset for the new hook to take effect
     sys.path_importer_cache.clear()

@@ -14,6 +14,8 @@ from typing import Generic, TypeVar
 
 T = TypeVar("T")
 
+__all__ = ("Peekable",)
+
 
 class Peekable(Generic[T]):
     def __init__(self, iterable: Iterable[T]):

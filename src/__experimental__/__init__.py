@@ -10,17 +10,16 @@ from collections.abc import Callable, Sequence
 from importlib._bootstrap import _call_with_frames_removed  # type: ignore # Has to come from the source.
 from typing import TYPE_CHECKING, ClassVar, ParamSpec, Protocol, TypeAlias, TypeVar, cast
 
-from ._late_bound_arg_defaults_impl import _modify_ast, _modify_source, transform as transform_into_late_bound_defaults
+from ._late_bound_arg_defaults import _modify_ast, _modify_source, transform as transform_into_late_bound_defaults
+from ._lazy_import import lazy_module_import
 
 if TYPE_CHECKING:
     import types
 
-    from typing_extensions import Buffer, Self
+    from typing_extensions import Buffer as ReadableBuffer, Self
 
-    # Copied from _typeshed - they were marked as stable.
-    ReadableBuffer: TypeAlias = Buffer
-    StrPath: TypeAlias = str | os.PathLike[str]
-
+# Copied from _typeshed - this and ReadableBuffer were marked as stable.
+StrPath: TypeAlias = str | os.PathLike[str]
 
 T = TypeVar("T")
 P = ParamSpec("P")
@@ -34,10 +33,12 @@ _call_with_frames_removed = cast(_CurryProtocol, _call_with_frames_removed)
 
 # TODO: Benchmark to see if removing as many annotation-related imports at runtime as possible makes a difference.
 
-__all__ = ("late_bound_arg_defaults",)
+__all__ = ("late_bound_arg_defaults", "lazy_module_import")
 
 
 class _ExperimentalFeature:
+    """A feature class that attempts to emulate `__future__._Feature` to some degree."""
+
     feature_register: ClassVar[dict[str, Self]] = {}
 
     def __init__(
@@ -85,6 +86,7 @@ class _ExperimentalFinder(importlib.abc.MetaPathFinder):
         path: Sequence[str] | None,
         target: types.ModuleType | None = None,
     ) -> importlib.machinery.ModuleSpec | None:
+        # Source for this way of finding: _pytest.assertion.rewrite.
         spec = importlib.machinery.PathFinder.find_spec(fullname, path, target)
 
         if (
@@ -116,8 +118,8 @@ class _ExperimentalLoader(importlib.machinery.SourceFileLoader):
     ) -> types.CodeType:
         # Get the AST for the importing module.
 
-        # TODO: Get rid of this hack somehow. Find a way to identify the imports without a node visitor.
-        # Maybe using the tokenizer?
+        # TODO: Get rid of this hack somehow. Find a way to identify the imports without needing a node visitor.
+        # That way, the indicator that the source needs modifying before AST parsing doesn't have to be a SyntaxError.
         expect_late_bound_flag = False
         try:
             tree: ast.Module = _call_with_frames_removed(
@@ -142,7 +144,7 @@ class _ExperimentalLoader(importlib.machinery.SourceFileLoader):
                 flags=ast.PyCF_ONLY_AST,
             )
 
-        # Check if the code imports anything from experimental.
+        # Check if the code imports anything from __experimental__.
         checker = _ExperimentalImportCollector()
         checker.visit(tree)
         found_flags = set(checker.experimental_flags)
@@ -158,19 +160,25 @@ class _ExperimentalLoader(importlib.machinery.SourceFileLoader):
                     tree = late_bound_arg_defaults.transformer(ast.unparse(tree))
                 activated_features.add("late_bound_arg_defaults")
 
+            found_features = found_flags.intersection(_ExperimentalFeature.feature_register.keys())
             # Assume any features made in the future will do pure AST transformation for now.
-            for feature_name, feature in _ExperimentalFeature.feature_register.items():
+            for feature_name in found_features:
                 if feature_name in found_flags and feature_name not in activated_features:
-                    tree = feature.transformer(tree)
+                    tree = _ExperimentalFeature.feature_register[feature_name].transformer(tree)
                     activated_features.add(feature_name)
 
         # Always perform the normal compilation step.
         return _call_with_frames_removed(compile, tree, path, "exec", dont_inherit=True, optimize=_optimize)
 
 
+_EXPERIMENTAL_FINDER = _ExperimentalFinder()
+
+
 def install() -> None:
-    og_meta_path_length = len(sys.meta_path)
-    for i, finder in enumerate(reversed(sys.meta_path)):
-        if isinstance(finder, _ExperimentalFinder):
-            del sys.meta_path[og_meta_path_length - i - 1]
-    sys.meta_path.insert(0, _ExperimentalFinder())
+    if _EXPERIMENTAL_FINDER not in sys.meta_path:
+        sys.meta_path.insert(0, _EXPERIMENTAL_FINDER)
+
+
+def uninstall() -> None:
+    if _EXPERIMENTAL_FINDER in sys.meta_path:
+        sys.meta_path.remove(_EXPERIMENTAL_FINDER)

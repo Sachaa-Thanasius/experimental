@@ -1,17 +1,18 @@
 from __future__ import annotations
 
 import ast
+import importlib.abc
 import importlib.machinery
 import importlib.util
+import os
 import sys
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from importlib._bootstrap import _call_with_frames_removed  # type: ignore # Has to come from the source.
 from typing import TYPE_CHECKING, ClassVar, ParamSpec, Protocol, TypeAlias, TypeVar, cast
 
 from ._late_bound_arg_defaults_impl import _modify_ast, _modify_source, transform as transform_into_late_bound_defaults
 
 if TYPE_CHECKING:
-    import os
     import types
 
     from typing_extensions import Buffer, Self
@@ -72,22 +73,51 @@ class _ExperimentalImportCollector(ast.NodeVisitor):
 
     def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
         # TODO: Force more conditions on where the imports must be, e.g. at the top of a file after future imports.
-        if node.module == "experimental" and node.level == 0:
+        if node.module == "__experimental__" and node.level == 0:
             self.experimental_flags.update(alias.name for alias in node.names if alias.name[0] != "_")
         return self.generic_visit(node)
 
 
-class _ExperimentalSourceFileLoader(importlib.machinery.SourceFileLoader):
+class _ExperimentalFinder(importlib.abc.MetaPathFinder):
+    def find_spec(
+        self,
+        fullname: str,
+        path: Sequence[str] | None,
+        target: types.ModuleType | None = None,
+    ) -> importlib.machinery.ModuleSpec | None:
+        spec = importlib.machinery.PathFinder.find_spec(fullname, path, target)
+
+        if (
+            spec is None
+            or spec.origin is None
+            or not isinstance(spec.loader, importlib.machinery.SourceFileLoader)
+            or not os.path.exists(spec.origin)  # noqa: PTH110
+        ):
+            return None
+
+        return importlib.util.spec_from_file_location(
+            fullname,
+            spec.origin,
+            loader=_ExperimentalLoader(fullname, spec.origin),
+            submodule_search_locations=spec.submodule_search_locations,
+        )
+
+
+class _ExperimentalLoader(importlib.machinery.SourceFileLoader):
+    def create_module(self, spec: importlib.machinery.ModuleSpec) -> types.ModuleType | None:
+        """Use default semantics for module creation, for now."""
+
     def source_to_code(  # type: ignore
         self,
-        data: ReadableBuffer | str | ast.Module | ast.Expression | ast.Interactive,
+        data: ReadableBuffer,
         path: ReadableBuffer | StrPath,
         *,
         _optimize: int = -1,
     ) -> types.CodeType:
         # Get the AST for the importing module.
 
-        # TODO: Get rid of this hack somehow.
+        # TODO: Get rid of this hack somehow. Find a way to identify the imports without a node visitor.
+        # Maybe using the tokenizer?
         expect_late_bound_flag = False
         try:
             tree: ast.Module = _call_with_frames_removed(
@@ -100,11 +130,11 @@ class _ExperimentalSourceFileLoader(importlib.machinery.SourceFileLoader):
                 flags=ast.PyCF_ONLY_AST,
             )
         except SyntaxError:
-            data = _modify_source(importlib.util.decode_source(data))
+            modified_data = _modify_source(importlib.util.decode_source(data))
             expect_late_bound_flag = True
             tree: ast.Module = _call_with_frames_removed(
                 compile,
-                data,
+                modified_data,
                 path,
                 "exec",
                 dont_inherit=True,
@@ -139,14 +169,8 @@ class _ExperimentalSourceFileLoader(importlib.machinery.SourceFileLoader):
 
 
 def install() -> None:
-    # TODO: Consider switching to meta path finder & loader. Hypothetically might run before pytest's.
-    # Almost exactly the same as the default FileFinder hook, with one difference: the loader for source files.
-    extensions = (importlib.machinery.ExtensionFileLoader, importlib.machinery.EXTENSION_SUFFIXES)
-    source = (_ExperimentalSourceFileLoader, importlib.machinery.SOURCE_SUFFIXES)
-    bytecode = (importlib.machinery.SourcelessFileLoader, importlib.machinery.BYTECODE_SUFFIXES)
-
-    # In theory, the FileFinder hook should always be the last one?
-    sys.path_hooks[-1] = importlib.machinery.FileFinder.path_hook(extensions, source, bytecode)
-
-    # In theory, this needs to be reset for the new hook to take effect.
-    sys.path_importer_cache.clear()
+    og_meta_path_length = len(sys.meta_path)
+    for i, finder in enumerate(reversed(sys.meta_path)):
+        if isinstance(finder, _ExperimentalFinder):
+            del sys.meta_path[og_meta_path_length - i - 1]
+    sys.meta_path.insert(0, _ExperimentalFinder())

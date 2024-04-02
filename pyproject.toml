@@ -17,11 +17,8 @@ classifiers = ["Development Status :: 1 - Planning"]
 [project.optional-dependencies]
 dev = ["tox"]
 
-[tool.setuptools]
-packages = ["experimental"]
-
 [tool.ruff]
-include = ["experimental/*"]
+include = ["src/__experimental__/*"]
 line-length = 120
 target-version = "py310"
 
@@ -104,7 +101,7 @@ combine-as-imports = true
 keep-runtime-typing = true
 
 [tool.pyright]
-include = ["experimental"]
+include = ["src/__experimental__"]
 ignore = ["tests"]
 pythonVersion = "3.10"
 typeCheckingMode = "strict"
@@ -115,3 +112,7 @@ reportMissingTypeStubs = "warning"
 reportImportCycles = "warning"
 reportPropertyTypeMismatch = "warning"
 reportUnnecessaryTypeIgnoreComment = "warning"
+
+[tool.pytest.ini_options]
+pythonpath = "src"
+addopts = ["--import-mode=importlib"]

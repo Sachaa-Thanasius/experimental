@@ -197,7 +197,7 @@ class LateBoundDefaultTransformer(ast.NodeTransformer):
             position += 1
 
         aliases = [ast.alias("_defer"), ast.alias("_evaluate_late_binding")]
-        imports = ast.ImportFrom(module="experimental._late_bound_arg_defaults_impl", names=aliases, level=0)
+        imports = ast.ImportFrom(module="__experimental__._late_bound_arg_defaults_impl", names=aliases, level=0)
         node.body.insert(position, imports)
 
         return self.generic_visit(node)  # type: ignore

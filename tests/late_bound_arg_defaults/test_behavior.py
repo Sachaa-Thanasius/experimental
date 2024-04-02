@@ -1,6 +1,6 @@
 import ast
 
-from experimental import _late_bound_arg_defaults_impl as late_bind
+from __experimental__ import _late_bound_arg_defaults_impl as late_bind, install
 
 ORIGINAL_FUNC = """\
 def test_func(
@@ -31,7 +31,7 @@ def test_func(
 """
 
 POST_AST_TRANSFORM_FUNC = """\
-from experimental._late_bound_arg_defaults_impl import _defer, _evaluate_late_binding
+from __experimental__._late_bound_arg_defaults_impl import _defer, _evaluate_late_binding
 
 def test_func(z: float, a: int=1, b: list[int]=_defer(lambda z, a: [a] * a), /, c: dict[str, int]=_defer(lambda z, a, b: {str(a): b}), *, d: str=_defer(lambda z, a, b, c: str(a) + str(c))) -> str:
     _evaluate_late_binding(locals())
@@ -93,4 +93,13 @@ def test_modify_ast_with_docstring_and_future_import() -> None:
     assert transformed_source == expected_result
 
 
+def test_loader() -> None:
+    install()
+    from .sample import example_func
 
+    z, a, b, c, d = example_func(2.0, 3)
+    assert z == 2.0
+    assert a == 3
+    assert b == [3, 3, 3]
+    assert c == {"3": [3, 3, 3]}
+    assert d == "2.0{'3': [3, 3, 3]}"

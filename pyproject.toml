@@ -1,6 +1,6 @@
 [build-system]
-requires = ["setuptools"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [project]
 name = "experimental"
@@ -8,14 +8,72 @@ description = "A package containing some of my messing about with python."
 requires-python = ">=3.10"
 version = "2024.03.30"
 readme = "README.md"
-license = { file = "LICENSE" }
+license = "MIT"
 authors = [
     { name = "Sachaa-Thanasius", email = "111999343+Sachaa-Thanasius@users.noreply.github.com" },
 ]
-classifiers = ["Development Status :: 1 - Planning"]
+classifiers = [
+    "Development Status :: 1 - Planning",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Python :: Implementation :: PyPy",
+]
 
-[project.optional-dependencies]
-dev = ["tox"]
+[project.urls]
+Documentation = "https://github.com/Sachaa-Thanasius/experimental#readme"
+Issues = "https://github.com/Sachaa-Thanasius/experimental/issues"
+Source = "https://github.com/Sachaa-Thanasius/experimental"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/__experimental__"]
+
+[tool.hatch.build.targets.wheel.hooks.autorun]
+dependencies = ["hatch-autorun"]
+code = """
+try:
+    import __experimental__
+except ImportError:
+    pass
+else:
+    __experimental__.install()
+"""
+
+[tool.hatch.envs.default]
+dependencies = ["coverage[toml]>=6.5", "pytest"]
+
+[tool.hatch.envs.default.scripts]
+test = "pytest {args:tests}"
+test-cov = "coverage run -m pytest {args:tests}"
+cov-report = ["- coverage combine", "coverage report"]
+cov = ["test-cov", "cov-report"]
+
+[[tool.hatch.envs.all.matrix]]
+python = ["3.10", "3.11", "3.12"]
+
+# [tool.hatch.envs.types]
+# dependencies = ["pyright>=1.0.0"]
+
+# [tool.hatch.envs.types.scripts]
+# check = "mypy --install-types --non-interactive {args:src/_experimental_ tests}"
+
+[tool.coverage.run]
+source_pkgs = ["__experimental__", "tests"]
+branch = true
+parallel = true
+
+[tool.coverage.paths]
+__experimental__ = ["src/__experimental__"]
+tests = ["tests"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "no cov",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",          # 
+]
 
 [tool.ruff]
 include = ["src/__experimental__/*"]

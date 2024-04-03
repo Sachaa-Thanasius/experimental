@@ -38,14 +38,25 @@ class _LazyFinder(importlib.abc.MetaPathFinder):
             msg = f"No module named {fullname!r}"
             raise ModuleNotFoundError(msg, name=fullname)
 
-        spec.loader = importlib.util.LazyLoader(spec.loader)  # pyright: ignore [reportArgumentType] # Let a None cause an exception naturally.
+        if spec.loader is None:
+            raise ImportError("spec is missing a loader")
+
+        spec.loader = importlib.util.LazyLoader(spec.loader)
         return spec
 
 
 _LAZY_FINDER = _LazyFinder()
 
 
-class _LazyMeta(type):
+class lazy_module_import:
+    """A context manager that causes imports occuring within it to occur lazily.
+
+    Notes
+    -----
+    The implementation isn't that clever. It adds a special finder to sys.meta_path and then removes it. That finder
+    wraps the loaders of imported modules with importlib.util.LazyLoader.
+    """
+
     def __enter__(self):
         if _LAZY_FINDER not in sys.meta_path:
             sys.meta_path.insert(0, _LAZY_FINDER)
@@ -56,13 +67,3 @@ class _LazyMeta(type):
             sys.meta_path.remove(_LAZY_FINDER)
         except ValueError:
             pass
-
-
-class lazy_module_import(metaclass=_LazyMeta):
-    """A context manager that causes imports occuring within it to occur lazily.
-
-    Notes
-    -----
-    The implementation isn't that clever. It adds a special finder to sys.meta_path and then removes it. That finder
-    wraps the loaders of imported modules with importlib.util.LazyLoader.
-    """

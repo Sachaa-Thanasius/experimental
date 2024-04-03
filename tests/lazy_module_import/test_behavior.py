@@ -65,7 +65,7 @@ def test_recipe_docs():
 
 def test_lazy_imp():
     with catchtime() as ct:  # noqa: SIM117 # Display the separate block.
-        with lazy_module_import:
+        with lazy_module_import():
             import concurrent.futures
             import contextlib
             import inspect
@@ -79,14 +79,13 @@ def test_lazy_imp():
 
 
 def test_delayed_circular_import():
+    import inspect
     import typing
 
     from tests.lazy_module_import.sample_pkg import module1, module2
 
-    assert typing.get_type_hints(module1.Class1.__init__) == {"scr": module2.Class2 | None}
-    assert typing.get_type_hints(module2.Class2.__init__) == {"scr": module1.Class1 | None}
-
-    import inspect
-
     assert inspect.get_annotations(module1.Class1.__init__, eval_str=True) == {"scr": module2.Class2 | None}
     assert inspect.get_annotations(module2.Class2.__init__, eval_str=True) == {"scr": module1.Class1 | None}
+
+    assert typing.get_type_hints(module1.Class1.__init__) == {"scr": module2.Class2 | None}
+    assert typing.get_type_hints(module2.Class2.__init__) == {"scr": module1.Class1 | None}

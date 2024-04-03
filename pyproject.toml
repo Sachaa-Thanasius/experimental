@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 name = "experimental"
 description = "A package containing some of my messing about with python."
 requires-python = ">=3.10"
-version = "2024.03.30"
+version = "2024.04.02"
 readme = "README.md"
 license = "MIT"
 authors = [
@@ -41,23 +41,21 @@ else:
     __experimental__.install()
 """
 
-[tool.hatch.envs.default]
+[tool.hatch.envs.test]
 dependencies = ["coverage[toml]>=6.5", "pytest"]
 
-[tool.hatch.envs.default.scripts]
+[tool.hatch.envs.test.scripts]
 test = "pytest {args:tests}"
 test-cov = "coverage run -m pytest {args:tests}"
 cov-report = ["- coverage combine", "coverage report"]
 cov = ["test-cov", "cov-report"]
 
-[[tool.hatch.envs.all.matrix]]
+[[tool.hatch.envs.test.matrix]]
 python = ["3.10", "3.11", "3.12"]
 
-# [tool.hatch.envs.types]
-# dependencies = ["pyright>=1.0.0"]
-
-# [tool.hatch.envs.types.scripts]
-# check = "mypy --install-types --non-interactive {args:src/_experimental_ tests}"
+[tool.pytest.ini_options]
+pythonpath = "src"
+addopts = ["--import-mode=importlib"]
 
 [tool.coverage.run]
 source_pkgs = ["__experimental__", "tests"]
@@ -69,11 +67,7 @@ __experimental__ = ["src/__experimental__"]
 tests = ["tests"]
 
 [tool.coverage.report]
-exclude_lines = [
-    "no cov",
-    "if __name__ == .__main__.:",
-    "if TYPE_CHECKING:",          # 
-]
+exclude_lines = ["no cov", "if __name__ == .__main__.:", "if TYPE_CHECKING:"]
 
 [tool.ruff]
 include = ["src/__experimental__/*"]
@@ -172,7 +166,3 @@ reportMissingTypeStubs = "warning"
 reportImportCycles = "warning"
 reportPropertyTypeMismatch = "warning"
 reportUnnecessaryTypeIgnoreComment = "warning"
-
-[tool.pytest.ini_options]
-pythonpath = "src"
-addopts = ["--import-mode=importlib"]

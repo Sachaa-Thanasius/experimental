@@ -41,6 +41,8 @@ else:
     __experimental__.install()
 """
 
+# Testing-related config.
+
 [tool.hatch.envs.test]
 dependencies = ["coverage[toml]>=6.5", "pytest"]
 
@@ -59,6 +61,7 @@ addopts = ["--import-mode=importlib"]
 
 [tool.coverage.run]
 source_pkgs = ["__experimental__", "tests"]
+omit = ["tests/late_bound_arg_defaults/sample.py"] # Has invalid syntax.
 branch = true
 parallel = true
 
@@ -68,6 +71,8 @@ tests = ["tests"]
 
 [tool.coverage.report]
 exclude_lines = ["no cov", "if __name__ == .__main__.:", "if TYPE_CHECKING:"]
+
+# Linting-related config.
 
 [tool.ruff]
 include = ["src/__experimental__/*"]

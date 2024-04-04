@@ -10,7 +10,7 @@ from collections.abc import Callable, Sequence
 from importlib._bootstrap import _call_with_frames_removed  # type: ignore # Has to come from the source.
 from typing import TYPE_CHECKING, ClassVar, ParamSpec, Protocol, TypeAlias, TypeVar, cast
 
-from ._late_bound_arg_defaults import _modify_ast, _modify_source, transform as transform_into_late_bound_defaults
+from ._late_bound_arg_defaults import _modify_ast, _modify_source, parse as parse_into_late_bound_defaults
 from ._lazy_import import lazy_module_import
 
 if TYPE_CHECKING:
@@ -63,7 +63,7 @@ class _ExperimentalFeature:
 late_bound_arg_defaults = _ExperimentalFeature(
     "late_bound_arg_defaults",
     "2024.03.30",
-    transform_into_late_bound_defaults,
+    parse_into_late_bound_defaults,
     reference="https://peps.python.org/pep-0671/",
 )
 
@@ -111,7 +111,7 @@ class _ExperimentalLoader(importlib.machinery.SourceFileLoader):
 
     def source_to_code(  # type: ignore
         self,
-        data: ReadableBuffer,
+        data: ReadableBuffer,  # Should always be a readable buffer in the case of a source file, I think.
         path: ReadableBuffer | StrPath,
         *,
         _optimize: int = -1,

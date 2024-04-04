@@ -1,6 +1,6 @@
 import ast
 
-from __experimental__ import _late_bound_arg_defaults as late_bind, install
+from __experimental__ import _late_bound_arg_defaults as late_bind, install, uninstall
 
 ORIGINAL_FUNC = """\
 def test_func(
@@ -103,3 +103,5 @@ def test_loader() -> None:
     assert b == [3, 3, 3]
     assert c == {"3": [3, 3, 3]}
     assert d == "2.0{'3': [3, 3, 3]}"
+
+    uninstall()

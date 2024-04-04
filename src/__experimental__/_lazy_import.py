@@ -53,7 +53,7 @@ class lazy_module_import:
 
     Notes
     -----
-    The implementation isn't that clever. It adds a special finder to sys.meta_path and then removes it. That finder
+    This class is pretty simple: It adds a special finder to sys.meta_path and then removes it. That finder
     wraps the loaders of imported modules with importlib.util.LazyLoader.
     """
 

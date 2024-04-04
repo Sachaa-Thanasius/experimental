@@ -71,18 +71,16 @@ def _modify_tokens(tokens_iter: Iterable[tokenize.TokenInfo]) -> Generator[token
             yield tokenize.TokenInfo(tokenize.NAME, "_PEP671_MARKER", new_start, new_end, tok.line)
 
             # Fix the positions of the rest of the tokens on the same line.
-            late_bound_row = new_tok_row = tok.start[0]
+            old_row = tok.start[0]
 
-            while True:
-                tok = next(peekable_tokens_iter)  # noqa: PLW2901
-                new_tok_row = int(tok.start[0])
-                if late_bound_row != new_tok_row:
-                    yield tok
+            for ltr_tok in peekable_tokens_iter:
+                if old_row != int(ltr_tok.start[0]):
+                    yield ltr_tok
                     break
 
-                new_start = (tok.start[0], tok.start[1] + 13)
-                new_end = (tok.end[0], tok.end[1] + 13)
-                yield tokenize.TokenInfo(tok.type, tok.string, new_start, new_end, tok.line)
+                new_start = (ltr_tok.start[0], ltr_tok.start[1] + 13)
+                new_end = (ltr_tok.end[0], ltr_tok.end[1] + 13)
+                yield ltr_tok._replace(start=new_start, end=new_end)
 
         else:
             yield tok
@@ -174,12 +172,14 @@ class LateBoundDefaultTransformer(ast.NodeTransformer):
     def visit_FunctionDef(self, node: ast.FunctionDef) -> ast.FunctionDef:
         self._replace_late_bound_markers(node)
         self._add_late_binding_evaluate_call(node)
-        return self.generic_visit(node)  # type: ignore
+        self.generic_visit(node)
+        return node
 
     def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> ast.AsyncFunctionDef:
         self._replace_late_bound_markers(node)
         self._add_late_binding_evaluate_call(node)
-        return self.generic_visit(node)  # type: ignore
+        self.generic_visit(node)
+        return node
 
     def visit_Module(self, node: ast.Module) -> ast.Module:
         """Import the defer type and evaluation functions so that the late binding-related symbols are valid."""
@@ -200,12 +200,13 @@ class LateBoundDefaultTransformer(ast.NodeTransformer):
         imports = ast.ImportFrom(module="__experimental__._late_bound_arg_defaults", names=aliases, level=0)
         node.body.insert(position, imports)
 
-        return self.generic_visit(node)  # type: ignore
+        self.generic_visit(node)
+        return node
 
 
 def _modify_ast(tree: ast.AST) -> ast.Module:
     return ast.fix_missing_locations(LateBoundDefaultTransformer().visit(tree))
 
 
-def transform(source: str) -> ast.Module:
+def parse(source: str) -> ast.Module:
     return _modify_ast(ast.parse(_modify_source(source)))

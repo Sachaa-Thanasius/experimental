@@ -14,7 +14,7 @@ from __experimental__ import _inline_import as inline_import, install
     ],
 )
 def test_modify_source(test_source: str, expected_result: str) -> None:
-    retokenized_source = inline_import._modify_source(test_source)
+    retokenized_source = inline_import.transform_source(test_source)
     assert retokenized_source == expected_result
 
 
@@ -32,7 +32,7 @@ def test_modify_source(test_source: str, expected_result: str) -> None:
     ],
 )
 def test_modify_ast(test_source: str, expected_result: str) -> None:
-    transformed_source = ast.unparse(inline_import._modify_ast(ast.parse(test_source)))
+    transformed_source = ast.unparse(inline_import.transform_ast(ast.parse(test_source)))
     assert transformed_source == expected_result
 
 

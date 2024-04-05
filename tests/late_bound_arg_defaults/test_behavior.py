@@ -60,12 +60,12 @@ def test_func_with_late_bindings() -> None:
 
 
 def test_modify_source() -> None:
-    retokenized_source = late_bind._modify_source(ORIGINAL_FUNC)
+    retokenized_source = late_bind.transform_source(ORIGINAL_FUNC)
     assert retokenized_source == POST_RETOKENIZE_FUNC
 
 
 def test_modify_ast() -> None:
-    transformed_source = ast.unparse(late_bind._modify_ast(ast.parse(POST_RETOKENIZE_FUNC)))
+    transformed_source = ast.unparse(late_bind.transform_ast(ast.parse(POST_RETOKENIZE_FUNC)))
     assert transformed_source == POST_AST_TRANSFORM_FUNC
 
 
@@ -73,7 +73,7 @@ def test_modify_ast_with_docstring() -> None:
     original_source = f'"""Module level docstring"""\n{POST_RETOKENIZE_FUNC}'
     expected_result = f'"""Module level docstring"""\n{POST_AST_TRANSFORM_FUNC}'
 
-    transformed_source = ast.unparse(late_bind._modify_ast(ast.parse(original_source)))
+    transformed_source = ast.unparse(late_bind.transform_ast(ast.parse(original_source)))
     assert transformed_source == expected_result
 
 
@@ -81,7 +81,7 @@ def test_modify_ast_with_future_import() -> None:
     original_source = f"from __future__ import annotations\n{POST_RETOKENIZE_FUNC}"
     expected_result = f"from __future__ import annotations\n{POST_AST_TRANSFORM_FUNC}"
 
-    transformed_source = ast.unparse(late_bind._modify_ast(ast.parse(original_source)))
+    transformed_source = ast.unparse(late_bind.transform_ast(ast.parse(original_source)))
     assert transformed_source == expected_result
 
 
@@ -89,7 +89,7 @@ def test_modify_ast_with_docstring_and_future_import() -> None:
     original_source = f'"""Module level docstring"""\nfrom __future__ import annotations\n{POST_RETOKENIZE_FUNC}'
     expected_result = f'"""Module level docstring"""\nfrom __future__ import annotations\n{POST_AST_TRANSFORM_FUNC}'
 
-    transformed_source = ast.unparse(late_bind._modify_ast(ast.parse(original_source)))
+    transformed_source = ast.unparse(late_bind.transform_ast(ast.parse(original_source)))
     assert transformed_source == expected_result
 
 

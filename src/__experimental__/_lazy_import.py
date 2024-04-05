@@ -62,7 +62,7 @@ class lazy_module_import:
             sys.meta_path.insert(0, _LAZY_FINDER)
         return self
 
-    def __exit__(self, *_: object):
+    def __exit__(self, *exc: object):
         try:
             sys.meta_path.remove(_LAZY_FINDER)
         except ValueError:

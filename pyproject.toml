@@ -59,15 +59,15 @@ python = ["3.10", "3.11", "3.12"]
 pythonpath = "src"
 addopts = ["--import-mode=importlib"]
 
-[tool.coverage.run]
-source_pkgs = ["__experimental__", "tests"]
-omit = ["tests/late_bound_arg_defaults/sample.py"] # Has invalid syntax.
-branch = true
-parallel = true
-
 [tool.coverage.paths]
 __experimental__ = ["src/__experimental__"]
 tests = ["tests"]
+
+[tool.coverage.run]
+source_pkgs = ["__experimental__", "tests"]
+branch = true
+parallel = true
+omit = ["tests/late_bound_arg_defaults/sample.py"] # Has invalid syntax.
 
 [tool.coverage.report]
 exclude_lines = ["no cov", "if __name__ == .__main__.:", "if TYPE_CHECKING:"]

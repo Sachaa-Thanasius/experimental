@@ -3,8 +3,13 @@ import tokenize
 from collections.abc import Iterable
 from io import StringIO
 
+__all__ = ("transform_source", "transform_ast", "parse")
 
-def _modify_tokens(tokens: Iterable[tokenize.TokenInfo]) -> list[tokenize.TokenInfo]:
+
+# === Token modification.
+
+
+def transform_tokens(tokens: Iterable[tokenize.TokenInfo]) -> list[tokenize.TokenInfo]:
     new_tokens: list[tokenize.TokenInfo] = []
     tokens_iter = iter(tokens)
     for tok in tokens_iter:
@@ -66,9 +71,12 @@ def _modify_tokens(tokens: Iterable[tokenize.TokenInfo]) -> list[tokenize.TokenI
     return new_tokens
 
 
-def _modify_source(src: str) -> str:
-    tokens_list = _modify_tokens(tokenize.generate_tokens(StringIO(src).readline))
+def transform_source(src: str) -> str:
+    tokens_list = transform_tokens(tokenize.generate_tokens(StringIO(src).readline))
     return tokenize.untokenize(tokens_list)
+
+
+# === AST modification.
 
 
 class ImportExpressionTransformer(ast.NodeTransformer):
@@ -77,13 +85,16 @@ class ImportExpressionTransformer(ast.NodeTransformer):
         if isinstance(node, ast.Name):
             return node.id
 
-        if not (isinstance(node, ast.Attribute) and isinstance(node.value, (ast.Attribute, ast.Name))):  # noqa: UP038
+        if not (
+            isinstance(node, ast.Attribute)  # pyright: ignore[reportUnnecessaryIsInstance]
+            and isinstance(node.value, (ast.Attribute, ast.Name))  # noqa: UP038
+        ):
             msg = "Only names and attributes can be within the inline import expression."
             raise SyntaxError(msg)  # noqa: TRY004
 
         return cls._collapse_attributes(node.value) + f".{node.attr}"
 
-    def visit_Call(self, node: ast.Call) -> ast.Call:
+    def visit_Call(self, node: ast.Call) -> ast.AST:
         match node:
             case ast.Call(func=ast.Name(id="_IMPORTLIB_MARKER"), args=[ast.Attribute() | ast.Name() as import_arg]):
                 node.func = ast.Attribute(
@@ -94,10 +105,9 @@ class ImportExpressionTransformer(ast.NodeTransformer):
                 node.args[0] = ast.Constant(value=self._collapse_attributes(import_arg))
             case _:
                 pass
-        self.generic_visit(node)
-        return node
+        return self.generic_visit(node)
 
-    def visit_Module(self, node: ast.Module) -> ast.Module:
+    def visit_Module(self, node: ast.Module) -> ast.AST:
         expect_docstring = True
         position = 0
         for sub_node in node.body:
@@ -113,13 +123,12 @@ class ImportExpressionTransformer(ast.NodeTransformer):
         import_node = ast.Import(names=[ast.alias("importlib")])
         node.body.insert(position, import_node)
 
-        self.generic_visit(node)
-        return node
+        return self.generic_visit(node)
 
 
-def _modify_ast(tree: ast.AST) -> ast.Module:
+def transform_ast(tree: ast.AST) -> ast.Module:
     return ast.fix_missing_locations(ImportExpressionTransformer().visit(tree))
 
 
 def parse(code: str) -> ast.Module:
-    return _modify_ast(ast.parse(_modify_source(code)))
+    return transform_ast(ast.parse(transform_source(code)))

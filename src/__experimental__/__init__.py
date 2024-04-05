@@ -6,17 +6,19 @@ import importlib.machinery
 import importlib.util
 import os
 import sys
-from collections.abc import Callable, Sequence
+import tokenize
+from collections.abc import Callable, Iterable, Sequence
 from importlib._bootstrap import _call_with_frames_removed  # type: ignore # Has to come from the source.
-from typing import TYPE_CHECKING, ClassVar, ParamSpec, Protocol, TypeAlias, TypeVar, cast
+from io import BytesIO
+from typing import TYPE_CHECKING, NamedTuple, ParamSpec, Protocol, TypeAlias, TypeVar, cast
 
-from ._late_bound_arg_defaults import _modify_ast, _modify_source, parse as parse_into_late_bound_defaults
-from ._lazy_import import lazy_module_import
+from __experimental__ import _inline_import, _late_bound_arg_defaults
+from __experimental__._lazy_import import lazy_module_import
 
 if TYPE_CHECKING:
     import types
 
-    from typing_extensions import Buffer as ReadableBuffer, Self
+    from typing_extensions import Buffer as ReadableBuffer
 
 # Copied from _typeshed - this and ReadableBuffer were marked as stable.
 StrPath: TypeAlias = str | os.PathLike[str]
@@ -31,29 +33,27 @@ class _CurryProtocol(Protocol):
 
 _call_with_frames_removed = cast(_CurryProtocol, _call_with_frames_removed)
 
-# TODO: Benchmark to see if removing as many annotation-related imports at runtime as possible makes a difference.
 
-__all__ = ("late_bound_arg_defaults", "lazy_module_import")
+__all__ = ["lazy_module_import", "late_bound_arg_defaults", "inline_import"]
+
+all_feature_names = ["late_bound_arg_defaults", "inline_import"]
+
+
+class _Transformers(NamedTuple):
+    source: Callable[[str], str] | None = None
+    token: Callable[[Iterable[tokenize.TokenInfo]], Iterable[tokenize.TokenInfo]] | None = None
+    ast: Callable[[ast.AST], ast.Module] | None = None
+    parse: Callable[[str], ast.Module] | None = None
 
 
 class _ExperimentalFeature:
     """A feature class that attempts to emulate `__future__._Feature` to some degree."""
 
-    feature_register: ClassVar[dict[str, Self]] = {}
-
-    def __init__(
-        self,
-        name: str,
-        date_added: str,
-        transformer: Callable[..., ast.Module],
-        *,
-        reference: str | None = None,
-    ):
+    def __init__(self, name: str, date_added: str, *, transformers: _Transformers, reference: str | None = None):
         self.name = name
         self.date_added = date_added
-        self.transformer = transformer
+        self.transformers = transformers
         self.reference = reference
-        self.feature_register[name] = self
 
     def __repr__(self) -> str:
         maybe_ref = f", reference={self.reference}" if self.reference else ""
@@ -63,20 +63,26 @@ class _ExperimentalFeature:
 late_bound_arg_defaults = _ExperimentalFeature(
     "late_bound_arg_defaults",
     "2024.03.30",
-    parse_into_late_bound_defaults,
+    transformers=_Transformers(
+        _late_bound_arg_defaults.transform_source,
+        _late_bound_arg_defaults.transform_tokens,
+        _late_bound_arg_defaults.transform_ast,
+        _late_bound_arg_defaults.parse,
+    ),
     reference="https://peps.python.org/pep-0671/",
 )
 
-
-class _ExperimentalImportCollector(ast.NodeVisitor):
-    def __init__(self):
-        self.experimental_flags: set[str] = set()
-
-    def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
-        # TODO: Force more conditions on where the imports must be, e.g. at the top of a file after future imports.
-        if node.module == "__experimental__" and node.level == 0:
-            self.experimental_flags.update(alias.name for alias in node.names if alias.name[0] != "_")
-        return self.generic_visit(node)
+inline_import = _ExperimentalFeature(
+    "inline_import",
+    "2024.04.04",
+    transformers=_Transformers(
+        _inline_import.transform_source,
+        _inline_import.transform_tokens,
+        _inline_import.transform_ast,
+        _inline_import.parse,
+    ),
+    reference="https://github.com/ioistired/import-expression-parser",
+)
 
 
 class _ExperimentalFinder(importlib.abc.MetaPathFinder):
@@ -86,7 +92,7 @@ class _ExperimentalFinder(importlib.abc.MetaPathFinder):
         path: Sequence[str] | None,
         target: types.ModuleType | None = None,
     ) -> importlib.machinery.ModuleSpec | None:
-        # Source for this way of finding: _pytest.assertion.rewrite.
+        # Ensure that this is a source file we can actually rewrite. Inspired by pytest's finder.
         spec = importlib.machinery.PathFinder.find_spec(fullname, path, target)
 
         if (
@@ -106,66 +112,74 @@ class _ExperimentalFinder(importlib.abc.MetaPathFinder):
 
 
 class _ExperimentalLoader(importlib.machinery.SourceFileLoader):
+    @staticmethod
+    def _find_experimental_flags(tokens: list[tokenize.TokenInfo]) -> set[str]:
+        collected_flags: set[str] = set()
+        for (i, first), second, third in zip(enumerate(tokens), tokens[1:], tokens[2:], strict=False):
+            if (
+                first.type == tokenize.NAME
+                and first.string == "from"
+                and second.type == tokenize.NAME
+                and second.string == "__experimental__"
+                and third.type == tokenize.NAME
+                and third.string == "import"
+            ):
+                temp = i
+                fourth = tokens[temp + 3]
+                while fourth.exact_type in {tokenize.NAME, tokenize.COMMA}:
+                    if fourth.type == tokenize.NAME and fourth.string != "as":
+                        collected_flags.add(fourth.string)
+                    temp += 1
+                    fourth = tokens[temp + 3]
+        return collected_flags
+
     def create_module(self, spec: importlib.machinery.ModuleSpec) -> types.ModuleType | None:
         """Use default semantics for module creation, for now."""
 
     def source_to_code(  # type: ignore
         self,
-        data: ReadableBuffer,  # Should always be a readable buffer in the case of a source file, I think.
+        data: ReadableBuffer,
         path: ReadableBuffer | StrPath,
         *,
         _optimize: int = -1,
     ) -> types.CodeType:
-        # Get the AST for the importing module.
-
-        # TODO: Get rid of this hack somehow. Find a way to identify the imports without needing a node visitor.
-        # That way, the indicator that the source needs modifying before AST parsing doesn't have to be a SyntaxError.
-        expect_late_bound_flag = False
-        try:
-            tree: ast.Module = _call_with_frames_removed(
-                compile,
-                data,
-                path,
-                "exec",
-                dont_inherit=True,
-                optimize=_optimize,
-                flags=ast.PyCF_ONLY_AST,
-            )
-        except SyntaxError:
-            modified_data = _modify_source(importlib.util.decode_source(data))
-            expect_late_bound_flag = True
-            tree: ast.Module = _call_with_frames_removed(
-                compile,
-                modified_data,
-                path,
-                "exec",
-                dont_inherit=True,
-                optimize=_optimize,
-                flags=ast.PyCF_ONLY_AST,
-            )
+        source = importlib.util.decode_source(data)
+        tokens = list(tokenize.tokenize(BytesIO(source.encode()).readline))
 
         # Check if the code imports anything from __experimental__.
-        checker = _ExperimentalImportCollector()
-        checker.visit(tree)
-        found_flags = set(checker.experimental_flags)
-        activated_features: set[str] = set()
+        collected_flags: set[str] = self._find_experimental_flags(tokens)
+        features_to_activate: list[_ExperimentalFeature] = []
 
-        # Apply transformations accordingly.
-        if found_flags:
-            # This needs special-casing since it performs a str to AST transform instead of an AST to AST one.
-            if "late_bound_arg_defaults" in found_flags:
-                if expect_late_bound_flag:
-                    tree = _modify_ast(tree)
-                else:
-                    tree = late_bound_arg_defaults.transformer(ast.unparse(tree))
-                activated_features.add("late_bound_arg_defaults")
+        # Collect features to activate.
+        for found_flag in collected_flags:
+            if found_flag in all_feature_names:
+                features_to_activate.append(globals()[found_flag])
 
-            found_features = found_flags.intersection(_ExperimentalFeature.feature_register.keys())
-            # Assume any features made in the future will do pure AST transformation for now.
-            for feature_name in found_features:
-                if feature_name in found_flags and feature_name not in activated_features:
-                    tree = _ExperimentalFeature.feature_register[feature_name].transformer(tree)
-                    activated_features.add(feature_name)
+        # If no flags are set, do normal compilation.
+        if not features_to_activate:
+            return _call_with_frames_removed(compile, data, path, "exec", dont_inherit=True, optimize=_optimize)
+
+        # Apply relevant token transformations.
+        for feature in features_to_activate:
+            if feature.transformers.token:
+                tokens = list(feature.transformers.token(tokens))
+
+        source = tokenize.untokenize(tokens)
+
+        # Apply relevant AST transformations.
+        tree: ast.Module = _call_with_frames_removed(
+            compile,
+            source,
+            path,
+            "exec",
+            dont_inherit=True,
+            optimize=_optimize,
+            flags=ast.PyCF_ONLY_AST,
+        )
+
+        for feature in features_to_activate:
+            if feature.transformers.ast:
+                tree = feature.transformers.ast(tree)
 
         # Always perform the normal compilation step.
         return _call_with_frames_removed(compile, tree, path, "exec", dont_inherit=True, optimize=_optimize)
@@ -180,5 +194,7 @@ def install() -> None:
 
 
 def uninstall() -> None:
-    if _EXPERIMENTAL_FINDER in sys.meta_path:
+    try:
         sys.meta_path.remove(_EXPERIMENTAL_FINDER)
+    except ValueError:
+        pass

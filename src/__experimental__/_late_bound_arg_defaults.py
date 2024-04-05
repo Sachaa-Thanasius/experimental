@@ -16,6 +16,8 @@ from ._peekable import Peekable
 T = TypeVar("T")
 P = ParamSpec("P")
 
+__all__ = ("transform_source", "transform_ast", "parse")
+
 
 # === The parts that will actually do the work of implementing late binding argument defaults.
 
@@ -51,7 +53,7 @@ def _evaluate_late_binding(orig_locals: dict[str, object]) -> None:
 # === Token modification.
 
 
-def _modify_tokens(tokens_iter: Iterable[tokenize.TokenInfo]) -> Generator[tokenize.TokenInfo, None, None]:
+def transform_tokens(tokens_iter: Iterable[tokenize.TokenInfo]) -> Generator[tokenize.TokenInfo, None, None]:
     """Replaces '=>' with '= _PEP671_MARKER' in the token stream to mark where 'defer' objects should go."""
 
     peekable_tokens_iter = Peekable(tokens_iter)
@@ -86,10 +88,10 @@ def _modify_tokens(tokens_iter: Iterable[tokenize.TokenInfo]) -> Generator[token
             yield tok
 
 
-def _modify_source(src: str) -> str:
+def transform_source(src: str) -> str:
     """Replaces late binding tokens with valid Python, along with markers for the ast transformer."""
 
-    tokens_gen = _modify_tokens(tokenize.generate_tokens(StringIO(src).readline))
+    tokens_gen = transform_tokens(tokenize.generate_tokens(StringIO(src).readline))
     return tokenize.untokenize(tokens_gen)
 
 
@@ -169,19 +171,17 @@ class LateBoundDefaultTransformer(ast.NodeTransformer):
             case _:
                 node.body.insert(0, evaluate_expr)
 
-    def visit_FunctionDef(self, node: ast.FunctionDef) -> ast.FunctionDef:
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> ast.AST:
         self._replace_late_bound_markers(node)
         self._add_late_binding_evaluate_call(node)
-        self.generic_visit(node)
-        return node
+        return self.generic_visit(node)
 
-    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> ast.AsyncFunctionDef:
+    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> ast.AST:
         self._replace_late_bound_markers(node)
         self._add_late_binding_evaluate_call(node)
-        self.generic_visit(node)
-        return node
+        return self.generic_visit(node)
 
-    def visit_Module(self, node: ast.Module) -> ast.Module:
+    def visit_Module(self, node: ast.Module) -> ast.AST:
         """Import the defer type and evaluation functions so that the late binding-related symbols are valid."""
 
         expect_docstring = True
@@ -200,13 +200,12 @@ class LateBoundDefaultTransformer(ast.NodeTransformer):
         imports = ast.ImportFrom(module="__experimental__._late_bound_arg_defaults", names=aliases, level=0)
         node.body.insert(position, imports)
 
-        self.generic_visit(node)
-        return node
+        return self.generic_visit(node)
 
 
-def _modify_ast(tree: ast.AST) -> ast.Module:
+def transform_ast(tree: ast.AST) -> ast.Module:
     return ast.fix_missing_locations(LateBoundDefaultTransformer().visit(tree))
 
 
 def parse(source: str) -> ast.Module:
-    return _modify_ast(ast.parse(_modify_source(source)))
+    return transform_ast(ast.parse(transform_source(source)))

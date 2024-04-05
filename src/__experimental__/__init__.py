@@ -20,18 +20,18 @@ if TYPE_CHECKING:
 
     from typing_extensions import Buffer as ReadableBuffer
 
+    T = TypeVar("T")
+    P = ParamSpec("P")
+
+    class _CurryProtocol(Protocol):
+        def __call__(self, func: Callable[P, T], *args: P.args, **kwargs: P.kwargs) -> T: ...
+
+
+    _call_with_frames_removed = cast(_CurryProtocol, _call_with_frames_removed)
+
+
 # Copied from _typeshed - this and ReadableBuffer were marked as stable.
 StrPath: TypeAlias = str | os.PathLike[str]
-
-T = TypeVar("T")
-P = ParamSpec("P")
-
-
-class _CurryProtocol(Protocol):
-    def __call__(self, func: Callable[P, T], *args: P.args, **kwargs: P.kwargs) -> T: ...
-
-
-_call_with_frames_removed = cast(_CurryProtocol, _call_with_frames_removed)
 
 
 __all__ = ("all_feature_names", "lazy_module_import", "late_bound_arg_defaults", "inline_import")

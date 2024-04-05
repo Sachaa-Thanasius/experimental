@@ -4,9 +4,9 @@ build-backend = "hatchling.build"
 
 [project]
 name = "experimental"
-description = "A package containing some of my messing about with python."
+description = "A package with some experimental code transformations activated via '__future__'-like imports."
 requires-python = ">=3.10"
-version = "2024.04.02"
+version = "2024.04.04"
 readme = "README.md"
 license = "MIT"
 authors = [
@@ -19,7 +19,6 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: Implementation :: CPython",
-    "Programming Language :: Python :: Implementation :: PyPy",
 ]
 
 [project.urls]
@@ -65,12 +64,12 @@ tests = ["tests"]
 
 [tool.coverage.run]
 source_pkgs = ["__experimental__"]
+omit = ["tests/late_bound_arg_defaults/sample.py"] # Has invalid syntax.
 branch = true
 parallel = true
-omit = ["tests/late_bound_arg_defaults/sample.py"] # Has invalid syntax.
 
 [tool.coverage.report]
-exclude_lines = ["no cov", "if __name__ == .__main__.:", "if TYPE_CHECKING:"]
+exclude_lines = ["no cov", "if __name__ == .__main__:", "if TYPE_CHECKING:"]
 
 # Linting-related config.
 

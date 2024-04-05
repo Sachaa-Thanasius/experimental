@@ -32,17 +32,17 @@ def test_func(
 """
 
 POST_AST_TRANSFORM_FUNC = """\
-from __experimental__.features._late_bound_arg_defaults import _defer, _evaluate_late_binding
+from __experimental__.features._late_bound_arg_defaults import _defer as @defer, _evaluate_late_binding as @evaluate_late_binding
 
-def test_func(z: float, a: int=1, b: list[int]=_defer(lambda z, a: [a] * a), /, c: dict[str, int]=_defer(lambda z, a, b: {str(a): b}), *, d: str=_defer(lambda z, a, b, c: str(a) + str(c))) -> str:
-    _evaluate_late_binding(locals())
+def test_func(z: float, a: int=1, b: list[int]=@defer(lambda z, a: [a] * a), /, c: dict[str, int]=@defer(lambda z, a, b: {str(a): b}), *, d: str=@defer(lambda z, a, b, c: str(a) + str(c))) -> str:
+    @evaluate_late_binding(locals())
     result = [*b, a]
     return str(result)\
 """
 
 
-def test_func_with_late_bindings() -> None:
-    def actual_late_binding_implementation_example(
+def test_late_binding_logic() -> None:
+    def late_binding_logic_example(
         a: int,
         b: float = 1.0,
         /,
@@ -55,7 +55,7 @@ def test_func_with_late_bindings() -> None:
         late_bind._evaluate_late_binding(locals())
         return c, e
 
-    c, e = actual_late_binding_implementation_example(10)
+    c, e = late_binding_logic_example(10)
     assert c == ["Preceding args", 10, 1.0, "hello"]
     assert e == 4
 

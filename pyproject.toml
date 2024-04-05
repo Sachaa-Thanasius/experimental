@@ -64,7 +64,8 @@ tests = ["tests"]
 
 [tool.coverage.run]
 source_pkgs = ["__experimental__"]
-omit = ["tests/late_bound_arg_defaults/sample.py"] # Has invalid syntax.
+# Copied from elsewhere, structurally sound, not critical.
+omit = ["src/__experimental__/_peekable.py"]
 branch = true
 parallel = true
 

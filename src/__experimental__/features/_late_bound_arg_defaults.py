@@ -120,7 +120,7 @@ class LateBoundDefaultTransformer(ast.NodeTransformer):
             ),
             body=ast.Tuple(elts=node.args) if len(node.args) > 1 else node.args[0],
         )
-        return ast.Call(func=ast.Name(id="_defer", ctx=ast.Load()), args=[new_lambda], keywords=[])
+        return ast.Call(func=ast.Name(id="@defer", ctx=ast.Load()), args=[new_lambda], keywords=[])
 
     def _replace_late_bound_markers(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
         # Replace the markers in the function defaults with actual defer objects.
@@ -159,7 +159,7 @@ class LateBoundDefaultTransformer(ast.NodeTransformer):
         # Put a call to evaluate the defer objects, the late bindings, as the first line of the function.
         evaluate_expr = ast.Expr(
             value=ast.Call(
-                func=ast.Name(id="_evaluate_late_binding", ctx=ast.Load()),
+                func=ast.Name(id="@evaluate_late_binding", ctx=ast.Load()),
                 args=[ast.Call(func=ast.Name(id="locals", ctx=ast.Load()), args=[], keywords=[])],
                 keywords=[],
             )
@@ -196,7 +196,7 @@ class LateBoundDefaultTransformer(ast.NodeTransformer):
                     break
             position += 1
 
-        aliases = [ast.alias("_defer"), ast.alias("_evaluate_late_binding")]
+        aliases = [ast.alias("_defer", "@defer"), ast.alias("_evaluate_late_binding", "@evaluate_late_binding")]
         imports = ast.ImportFrom(module="__experimental__.features._late_bound_arg_defaults", names=aliases, level=0)
         node.body.insert(position, imports)
 

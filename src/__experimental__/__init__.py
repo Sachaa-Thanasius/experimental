@@ -12,6 +12,7 @@ from importlib._bootstrap import _call_with_frames_removed  # type: ignore # Has
 from io import BytesIO
 from typing import TYPE_CHECKING, NamedTuple, ParamSpec, Protocol, TypeAlias, TypeVar, cast
 
+from __experimental__._import_token_finder import get_imported_experimental_flags
 from __experimental__._lazy_import import lazy_module_import
 from __experimental__.features import _inline_import, _late_bound_arg_defaults
 
@@ -26,7 +27,6 @@ if TYPE_CHECKING:
     class _CurryProtocol(Protocol):
         def __call__(self, func: Callable[P, T], *args: P.args, **kwargs: P.kwargs) -> T: ...
 
-
     _call_with_frames_removed = cast(_CurryProtocol, _call_with_frames_removed)
 
 
@@ -34,7 +34,7 @@ if TYPE_CHECKING:
 StrPath: TypeAlias = str | os.PathLike[str]
 
 
-__all__ = ("all_feature_names", "lazy_module_import", "late_bound_arg_defaults", "inline_import")
+__all__ = ("all_feature_names", "late_bound_arg_defaults", "inline_import", "lazy_module_import")
 
 all_feature_names = ("late_bound_arg_defaults", "inline_import")
 
@@ -48,6 +48,8 @@ class _Transformers(NamedTuple):
 
 class _ExperimentalFeature:
     """A feature class that attempts to emulate `__future__._Feature` to some degree."""
+
+    __slots__ = ("name", "date_added", "transformers", "reference")
 
     def __init__(self, name: str, date_added: str, *, transformers: _Transformers, reference: str | None = None):
         self.name = name
@@ -112,27 +114,6 @@ class _ExperimentalFinder(importlib.abc.MetaPathFinder):
 
 
 class _ExperimentalLoader(importlib.machinery.SourceFileLoader):
-    @staticmethod
-    def _find_experimental_flags(tokens: list[tokenize.TokenInfo]) -> set[str]:
-        collected_flags: set[str] = set()
-        for (i, first), second, third in zip(enumerate(tokens), tokens[1:], tokens[2:], strict=False):
-            if (
-                first.type == tokenize.NAME
-                and first.string == "from"
-                and second.type == tokenize.NAME
-                and second.string == "__experimental__"
-                and third.type == tokenize.NAME
-                and third.string == "import"
-            ):
-                temp = i
-                fourth = tokens[temp + 3]
-                while fourth.exact_type in {tokenize.NAME, tokenize.COMMA}:
-                    if fourth.type == tokenize.NAME and fourth.string != "as":
-                        collected_flags.add(fourth.string)
-                    temp += 1
-                    fourth = tokens[temp + 3]
-        return collected_flags
-
     def create_module(self, spec: importlib.machinery.ModuleSpec) -> types.ModuleType | None:
         """Use default semantics for module creation, for now."""
 
@@ -144,10 +125,9 @@ class _ExperimentalLoader(importlib.machinery.SourceFileLoader):
         _optimize: int = -1,
     ) -> types.CodeType:
         source = importlib.util.decode_source(data)
-        tokens = list(tokenize.tokenize(BytesIO(source.encode()).readline))
 
         # Check if the code imports anything from __experimental__.
-        collected_flags: set[str] = self._find_experimental_flags(tokens)
+        collected_flags: set[str] = get_imported_experimental_flags(source)
         features_to_activate: list[_ExperimentalFeature] = []
 
         # Collect features to activate.
@@ -160,6 +140,8 @@ class _ExperimentalLoader(importlib.machinery.SourceFileLoader):
             return _call_with_frames_removed(compile, data, path, "exec", dont_inherit=True, optimize=_optimize)
 
         # Apply relevant token transformations.
+        tokens = list(tokenize.tokenize(BytesIO(source.encode()).readline))
+
         for feature in features_to_activate:
             if feature.transformers.token:
                 tokens = list(feature.transformers.token(tokens))

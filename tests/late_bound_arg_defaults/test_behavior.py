@@ -1,6 +1,7 @@
 import ast
 
-from __experimental__ import _late_bound_arg_defaults as late_bind, install, uninstall
+from __experimental__ import install, uninstall
+from __experimental__.features import _late_bound_arg_defaults as late_bind
 
 ORIGINAL_FUNC = """\
 def test_func(
@@ -31,7 +32,7 @@ def test_func(
 """
 
 POST_AST_TRANSFORM_FUNC = """\
-from __experimental__._late_bound_arg_defaults import _defer, _evaluate_late_binding
+from __experimental__.features._late_bound_arg_defaults import _defer, _evaluate_late_binding
 
 def test_func(z: float, a: int=1, b: list[int]=_defer(lambda z, a: [a] * a), /, c: dict[str, int]=_defer(lambda z, a, b: {str(a): b}), *, d: str=_defer(lambda z, a, b, c: str(a) + str(c))) -> str:
     _evaluate_late_binding(locals())

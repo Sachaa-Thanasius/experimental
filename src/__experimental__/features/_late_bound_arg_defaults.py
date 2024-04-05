@@ -11,7 +11,7 @@ from io import StringIO
 from itertools import takewhile
 from typing import Generic, ParamSpec, TypeGuard, TypeVar
 
-from ._peekable import Peekable
+from __experimental__._peekable import Peekable
 
 T = TypeVar("T")
 P = ParamSpec("P")
@@ -197,7 +197,7 @@ class LateBoundDefaultTransformer(ast.NodeTransformer):
             position += 1
 
         aliases = [ast.alias("_defer"), ast.alias("_evaluate_late_binding")]
-        imports = ast.ImportFrom(module="__experimental__._late_bound_arg_defaults", names=aliases, level=0)
+        imports = ast.ImportFrom(module="__experimental__.features._late_bound_arg_defaults", names=aliases, level=0)
         node.body.insert(position, imports)
 
         return self.generic_visit(node)

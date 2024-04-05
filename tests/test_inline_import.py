@@ -1,9 +1,7 @@
 import ast
-import tokenize
-from io import StringIO
 
 import pytest
-from __experimental__ import _inline_import as inline_import, install
+from __experimental__ import _inline_import as inline_import
 
 
 @pytest.mark.parametrize(
@@ -49,5 +47,5 @@ def test_modify_ast(test_source: str, expected_result: str) -> None:
         ),
     ],
 )
-def test_parse(test_source, expected_result) -> None:
+def test_parse(test_source: str, expected_result: str) -> None:
     assert ast.unparse(inline_import.parse(test_source)) == expected_result

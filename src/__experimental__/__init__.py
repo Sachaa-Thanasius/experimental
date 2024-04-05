@@ -12,8 +12,8 @@ from importlib._bootstrap import _call_with_frames_removed  # type: ignore # Has
 from io import BytesIO
 from typing import TYPE_CHECKING, NamedTuple, ParamSpec, Protocol, TypeAlias, TypeVar, cast
 
-from __experimental__ import _inline_import, _late_bound_arg_defaults
 from __experimental__._lazy_import import lazy_module_import
+from __experimental__.features import _inline_import, _late_bound_arg_defaults
 
 if TYPE_CHECKING:
     import types
@@ -34,9 +34,9 @@ class _CurryProtocol(Protocol):
 _call_with_frames_removed = cast(_CurryProtocol, _call_with_frames_removed)
 
 
-__all__ = ["lazy_module_import", "late_bound_arg_defaults", "inline_import"]
+__all__ = ("all_feature_names", "lazy_module_import", "late_bound_arg_defaults", "inline_import")
 
-all_feature_names = ["late_bound_arg_defaults", "inline_import"]
+all_feature_names = ("late_bound_arg_defaults", "inline_import")
 
 
 class _Transformers(NamedTuple):

@@ -17,7 +17,7 @@ from __experimental__._features import (
     late_bound_arg_defaults as _late_bound_arg_defaults,
 )
 from __experimental__._lazy_import import lazy_module_import
-from __experimental__._token_helper import get_imported_experimental_flags
+from __experimental__._utils.token_helper import get_imported_experimental_flags
 
 if TYPE_CHECKING:
     import types

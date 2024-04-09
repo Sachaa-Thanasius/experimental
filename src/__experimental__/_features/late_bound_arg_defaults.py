@@ -11,8 +11,8 @@ from io import BytesIO
 from itertools import takewhile
 from typing import TYPE_CHECKING, Optional, Tuple, Union
 
-from __experimental__._peekable import Peekable
-from __experimental__._utils import copy_annotations
+from __experimental__._utils.misc import copy_annotations
+from __experimental__._utils.peekable import Peekable
 
 if TYPE_CHECKING:
     from typing_extensions import Buffer as ReadableBuffer, TypeGuard

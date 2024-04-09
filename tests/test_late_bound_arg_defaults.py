@@ -8,8 +8,8 @@ import sys
 import types
 import typing
 
-from __experimental__ import _ExperimentalLoader
 from __experimental__._features import late_bound_arg_defaults as late_bind
+from __experimental__._main import _ExperimentalLoader
 
 # FIXME: Make tests more comprehensive.
 

@@ -10,6 +10,8 @@ else:
 
 T = TypeVar("T")
 
+__all__ = ("copy_annotations",)
+
 
 def copy_annotations(original_func: Callable[P, T]) -> Callable[[Callable[P, T]], Callable[P, T]]:
     # Overrides annotations, thus lying, but it works for the final annotations that the *user* sees on the decorated func.

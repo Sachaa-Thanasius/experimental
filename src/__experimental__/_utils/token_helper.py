@@ -25,6 +25,8 @@ import enum
 import re
 from typing import Generator, Pattern, Set, Tuple
 
+__all__ = ("get_imported_experimental_flags",)
+
 
 class TokenType(enum.Enum):
     IMPORT = 0
@@ -76,11 +78,13 @@ def _tokenize_pre_code(src: str) -> Generator[Tuple[TokenType, str], None, None]
 
 
 def get_imported_experimental_flags(src: str) -> Set[str]:
+    """Find all the imports from __experimental__ that were made at the top of a Python file."""
+
     # Attempts were made to switch over to a tokenize-based version, but it was 10x slower.
     potential_flags: set[str] = set()
     for tok_type, line in _tokenize_pre_code(src):
         if tok_type is TokenType.IMPORT and line.startswith(_FROM_EXPERIMENTAL):
-            potential_line = line[len(_FROM_EXPERIMENTAL) :]
+            potential_line = re.sub(COMMENT, "", line[len(_FROM_EXPERIMENTAL) :])
             for name in re.finditer(NAME, potential_line):
                 if name[0] == "as":
                     continue

@@ -24,13 +24,17 @@ def transform_tokens(tokens: Iterable[tokenize.TokenInfo]) -> list[tokenize.Toke
     for tok in tokens_iter:
         # ! is only an OP in 3.12+.
         if tok.type in {tokenize.OP, tokenize.ERRORTOKEN} and tok.string == "!":
-            last_place = len(new_tokens)
-
             # Collect all name and attribute access-related tokens directly connected to the !.
+            last_place = len(new_tokens)
+            looking_for_name = True
+
             for old_tok in reversed(new_tokens):
-                if old_tok.exact_type not in {tokenize.DOT, tokenize.NAME}:
+                if old_tok.exact_type != (tokenize.NAME if looking_for_name else tokenize.DOT):
                     break
+                # if old_tok.exact_type not in {tokenize.DOT, tokenize.NAME}:
+                #     break
                 last_place -= 1
+                looking_for_name = not looking_for_name
 
             # The question mark is just by itself. Let it error at the AST stage if it's wrong.
             if last_place == len(new_tokens):
@@ -134,29 +138,6 @@ class ImportExpressionTransformer(ast.NodeTransformer):
                 ctx=ast.Load(),
             )
             node.args[0] = ast.Constant(value=self._collapse_attributes(import_arg))
-
-        return self.generic_visit(node)
-
-    def visit_Module(self, node: ast.Module) -> ast.AST:
-        expect_docstring = True
-        position = 0
-        for sub_node in node.body:
-            if (
-                expect_docstring
-                and isinstance(sub_node, ast.Expr)
-                and isinstance(sub_node.value, ast.Constant)
-                and isinstance(sub_node.value.value, str)
-            ):
-                expect_docstring = False
-            elif isinstance(sub_node, ast.ImportFrom) and sub_node.module == "__future__" and sub_node.level == 0:
-                pass
-            else:
-                break
-
-            position += 1
-
-        import_node = ast.Import(names=[ast.alias("importlib")])
-        node.body.insert(position, import_node)
 
         return self.generic_visit(node)
 

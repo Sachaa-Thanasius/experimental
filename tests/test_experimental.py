@@ -13,7 +13,7 @@ import pytest
 from __experimental__ import install, lazy_module_import, uninstall
 from __experimental__.features import _inline_import as inline_import, _late_bound_arg_defaults as late_bind
 
-# TODO: Make tests more comprehensive.
+# FIXME: Make tests more comprehensive.
 
 
 class TestLateBoundArgDefaults:
@@ -259,8 +259,19 @@ class TestInlineImport:
         ],
     )
     def test_invalid_def_syntax(self, invalid_source: str) -> None:
+        # FIXME:
+        # "class X!: pass" turns into "class _IMPORTLIB_MARKER(X): pass"
+        # This doesn't trip up the initial ast parsing, but the transformer doesn't find and replace the marker.
+        # This results in _IMPORTLIB_MARKER being left behind and the final error being that X doesn't exist
+        # to be inherited from.
+        #
+        # This could be preempted at the tokenizer level potentially, or fixed afterwards in the AST transformer.
+        # The latter is simpler: Find all class definitions with the name _IMPORTLIB_MARKER and replace them.
+        # Technically can hit false positives though. More robust to do so at the tokenizer level somehow.
+
         with pytest.raises(SyntaxError):
-            _ = inline_import.parse(invalid_source)
+            tree = inline_import.parse(invalid_source, "<string>")
+            _ = compile(tree, "<string>", "exec")
 
     def test_kwargs(self) -> None:
         import collections

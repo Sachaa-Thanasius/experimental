@@ -1,16 +1,14 @@
-"""This code is copied from https://github.com/mikeshardmind/discord-rolebot/blob/main/rolebot/encoder.py
-which is available under the MPL License below:
-
-This Source Code Form is subject to the terms of the Mozilla Public
-License, v. 2.0. If a copy of the MPL was not distributed with this
-file, You can obtain one at http://mozilla.org/MPL/2.0/.
-
-Copyright (C) 2023 Michael Hall <https://github.com/mikeshardmind>
-"""
+# This code is copied from https://github.com/mikeshardmind/discord-rolebot/blob/main/rolebot/encoder.py
+# which is available under the MPL License below:
+#
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+#
+# Copyright (C) 2023 Michael Hall <https://github.com/mikeshardmind>
 
 from collections import deque
-from collections.abc import Iterable
-from typing import Generic, TypeVar
+from typing import Generic, Iterable, TypeVar
 
 T = TypeVar("T")
 

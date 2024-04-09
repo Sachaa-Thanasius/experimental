@@ -1,9 +1,17 @@
+from __future__ import annotations
+
 import ast
 import tokenize
 from collections.abc import Iterable
-from io import StringIO
+from io import BytesIO
+from typing import TYPE_CHECKING, Optional, Tuple, Union
 
-__all__ = ("transform_source", "transform_ast", "parse")
+from __experimental__._utils import copy_annotations
+
+if TYPE_CHECKING:
+    from typing_extensions import Buffer as ReadableBuffer
+
+__all__ = ("transform_tokens", "transform_source", "transform_ast", "parse")
 
 
 # === Token modification.
@@ -11,6 +19,7 @@ __all__ = ("transform_source", "transform_ast", "parse")
 
 def transform_tokens(tokens: Iterable[tokenize.TokenInfo]) -> list[tokenize.TokenInfo]:
     new_tokens: list[tokenize.TokenInfo] = []
+
     tokens_iter = iter(tokens)
     for tok in tokens_iter:
         # ! is only an OP in 3.12+.
@@ -55,25 +64,38 @@ def transform_tokens(tokens: Iterable[tokenize.TokenInfo]) -> list[tokenize.Toke
             new_tokens.append(end_paren_token)
 
             # Fix the positions of the rest of the tokens on the same line.
+            fixed_tokens: list[tokenize.TokenInfo] = []
+            after_tok: tokenize.TokenInfo | None = None
+
             old_row = end_paren_token.start[0]
 
             for ltr_tok in tokens_iter:
                 if old_row != int(ltr_tok.start[0]):
-                    new_tokens.append(ltr_tok)
+                    after_tok = ltr_tok
                     break
 
                 new_start = (ltr_tok.start[0], ltr_tok.start[1] + 18)
                 new_end = (ltr_tok.end[0], ltr_tok.end[1] + 18)
-                new_tokens.append(ltr_tok._replace(start=new_start, end=new_end))
+                fixed_tokens.append(ltr_tok._replace(start=new_start, end=new_end))
+
+            new_tokens.extend(transform_tokens(fixed_tokens))
+
+            if after_tok:
+                new_tokens.append(after_tok)
         else:
             new_tokens.append(tok)
 
     return new_tokens
 
 
-def transform_source(src: str) -> str:
-    tokens_list = transform_tokens(tokenize.generate_tokens(StringIO(src).readline))
-    return tokenize.untokenize(tokens_list)
+def transform_source(source: Union[str, ReadableBuffer]) -> str:
+    if isinstance(source, str):
+        source = source.encode("utf-8")
+    stream = BytesIO(source)
+    encoding, _ = tokenize.detect_encoding(stream.readline)
+    stream.seek(0)
+    tokens_list = transform_tokens(tokenize.tokenize(stream.readline))
+    return tokenize.untokenize(tokens_list).decode(encoding)
 
 
 # === AST modification.
@@ -87,7 +109,7 @@ class ImportExpressionTransformer(ast.NodeTransformer):
 
         if not (
             isinstance(node, ast.Attribute)  # pyright: ignore[reportUnnecessaryIsInstance]
-            and isinstance(node.value, (ast.Attribute, ast.Name))  # noqa: UP038
+            and isinstance(node.value, (ast.Attribute, ast.Name))
         ):
             msg = "Only names and attributes can be within the inline import expression."
             raise SyntaxError(msg)  # noqa: TRY004
@@ -95,29 +117,42 @@ class ImportExpressionTransformer(ast.NodeTransformer):
         return cls._collapse_attributes(node.value) + f".{node.attr}"
 
     def visit_Call(self, node: ast.Call) -> ast.AST:
-        match node:
-            case ast.Call(func=ast.Name(id="_IMPORTLIB_MARKER"), args=[ast.Attribute() | ast.Name() as import_arg]):
-                node.func = ast.Attribute(
-                    value=ast.Name(id="importlib", ctx=ast.Load()),
-                    attr="import_module",
-                    ctx=ast.Load(),
-                )
-                node.args[0] = ast.Constant(value=self._collapse_attributes(import_arg))
-            case _:
-                pass
+        if (
+            isinstance(node.func, ast.Name)
+            and node.func.id == "_IMPORTLIB_MARKER"
+            and len(node.args) == 1
+            and isinstance(node.args[0], (ast.Attribute, ast.Name))
+        ):
+            import_arg = node.args[0]
+            node.func = ast.Attribute(
+                value=ast.Call(
+                    func=ast.Name(id="__import__", ctx=ast.Load()),
+                    args=[ast.Constant(value="importlib")],
+                    keywords=[],
+                ),
+                attr="import_module",
+                ctx=ast.Load(),
+            )
+            node.args[0] = ast.Constant(value=self._collapse_attributes(import_arg))
+
         return self.generic_visit(node)
 
     def visit_Module(self, node: ast.Module) -> ast.AST:
         expect_docstring = True
         position = 0
         for sub_node in node.body:
-            match sub_node:
-                case ast.Expr(value=ast.Constant(value=str())) if expect_docstring:
-                    expect_docstring = False
-                case ast.ImportFrom(module="__future__", level=0):
-                    pass
-                case _:
-                    break
+            if (
+                expect_docstring
+                and isinstance(sub_node, ast.Expr)
+                and isinstance(sub_node.value, ast.Constant)
+                and isinstance(sub_node.value.value, str)
+            ):
+                expect_docstring = False
+            elif isinstance(sub_node, ast.ImportFrom) and sub_node.module == "__future__" and sub_node.level == 0:
+                pass
+            else:
+                break
+
             position += 1
 
         import_node = ast.Import(names=[ast.alias("importlib")])
@@ -130,5 +165,22 @@ def transform_ast(tree: ast.AST) -> ast.Module:
     return ast.fix_missing_locations(ImportExpressionTransformer().visit(tree))
 
 
-def parse(code: str) -> ast.Module:
-    return transform_ast(ast.parse(transform_source(code)))
+# Some of the parameter annotations are wrong, but they should be "overriden" by this decorator.
+@copy_annotations(ast.parse)  # type: ignore
+def parse(
+    source: Union[str, ReadableBuffer],
+    filename: str = "<unknown>",
+    mode: str = "exec",
+    *,
+    type_comments: bool = False,
+    feature_version: Optional[Tuple[int, int]] = None,
+) -> ast.Module:
+    return transform_ast(
+        ast.parse(
+            transform_source(source),
+            filename,
+            mode,
+            type_comments=type_comments,
+            feature_version=feature_version,
+        )
+    )

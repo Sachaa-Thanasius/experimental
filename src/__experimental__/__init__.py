@@ -8,18 +8,18 @@ import os
 import sys
 import tokenize
 from collections.abc import Callable, Iterable, Sequence
-from importlib._bootstrap import _call_with_frames_removed  # type: ignore # Has to come from the source.
+from importlib._bootstrap import _call_with_frames_removed  # type: ignore # Has to come from importlib.
 from io import BytesIO
-from typing import TYPE_CHECKING, NamedTuple, ParamSpec, Protocol, TypeAlias, TypeVar, cast
+from typing import TYPE_CHECKING, NamedTuple, Protocol, TypeVar, cast
 
-from __experimental__._import_token_finder import get_imported_experimental_flags
 from __experimental__._lazy_import import lazy_module_import
+from __experimental__._token_helper import get_imported_experimental_flags
 from __experimental__.features import _inline_import, _late_bound_arg_defaults
 
 if TYPE_CHECKING:
     import types
 
-    from typing_extensions import Buffer as ReadableBuffer
+    from typing_extensions import Buffer as ReadableBuffer, ParamSpec, TypeAlias
 
     T = TypeVar("T")
     P = ParamSpec("P")
@@ -31,7 +31,7 @@ if TYPE_CHECKING:
 
 
 # Copied from _typeshed - this and ReadableBuffer were marked as stable.
-StrPath: TypeAlias = str | os.PathLike[str]
+StrPath: TypeAlias = "str | os.PathLike[str]"
 
 
 __all__ = ("all_feature_names", "late_bound_arg_defaults", "inline_import", "lazy_module_import")
@@ -94,7 +94,7 @@ class _ExperimentalFinder(importlib.abc.MetaPathFinder):
         path: Sequence[str] | None,
         target: types.ModuleType | None = None,
     ) -> importlib.machinery.ModuleSpec | None:
-        # Ensure that this is a source file we can actually rewrite. Inspired by pytest's finder.
+        # Ensure that this is a source file we can actually rewrite. Inspired by pytest's finding logic.
         spec = importlib.machinery.PathFinder.find_spec(fullname, path, target)
 
         if (
@@ -126,26 +126,24 @@ class _ExperimentalLoader(importlib.machinery.SourceFileLoader):
     ) -> types.CodeType:
         source = importlib.util.decode_source(data)
 
-        # Check if the code imports anything from __experimental__.
+        # Check if the code imports anything from __experimental__ and collect imported features.
         collected_flags: set[str] = get_imported_experimental_flags(source)
-        features_to_activate: list[_ExperimentalFeature] = []
-
-        # Collect features to activate.
-        for found_flag in collected_flags:
-            if found_flag in all_feature_names:
-                features_to_activate.append(globals()[found_flag])
+        features_to_activate: tuple[_ExperimentalFeature] = tuple(
+            globals()[flag] for flag in collected_flags.intersection(all_feature_names)
+        )
 
         # If no flags are set, do normal compilation.
         if not features_to_activate:
             return _call_with_frames_removed(compile, data, path, "exec", dont_inherit=True, optimize=_optimize)
 
         # Apply relevant token transformations.
-        tokens = list(tokenize.tokenize(BytesIO(source.encode()).readline))
+        tokens = tokenize.tokenize(BytesIO(data).readline)
 
         for feature in features_to_activate:
             if feature.transformers.token:
-                tokens = list(feature.transformers.token(tokens))
+                tokens = feature.transformers.token(tokens)
 
+        # The source should be syntactically valid now as far as we're concerned.
         source = tokenize.untokenize(tokens)
 
         # Apply relevant AST transformations.

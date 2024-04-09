@@ -39,7 +39,8 @@ class _LazyFinder(importlib.abc.MetaPathFinder):
             raise ModuleNotFoundError(msg, name=fullname)
 
         if spec.loader is None:
-            raise ImportError("spec is missing a loader")
+            msg = f"spec for {spec.name!r} is missing a loader"
+            raise ImportError(msg)
 
         spec.loader = importlib.util.LazyLoader(spec.loader)
         return spec

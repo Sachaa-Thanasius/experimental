@@ -7,28 +7,30 @@ import ctypes
 import sys
 import tokenize
 from collections.abc import Callable, Generator, Iterable
-from io import StringIO
+from io import BytesIO
 from itertools import takewhile
-from typing import Generic, ParamSpec, TypeGuard, TypeVar
+from typing import TYPE_CHECKING, Optional, Tuple, Union
 
 from __experimental__._peekable import Peekable
+from __experimental__._utils import copy_annotations
 
-T = TypeVar("T")
-P = ParamSpec("P")
+if TYPE_CHECKING:
+    from typing_extensions import Buffer as ReadableBuffer, TypeGuard
 
-__all__ = ("transform_source", "transform_ast", "parse")
+
+__all__ = ("transform_tokens", "transform_source", "transform_ast", "parse")
 
 
 # === The parts that will actually do the work of implementing late binding argument defaults.
 
 
-class _defer(Generic[P, T]):
+class _defer:
     """A class that holds the functions used for late binding in function signatures."""
 
-    def __init__(self, func: Callable[P, T]):
+    def __init__(self, func: Callable[..., object]):
         self.func = func
 
-    def __call__(self, *args: P.args, **kwargs: P.kwargs) -> T:
+    def __call__(self, *args: object, **kwargs: object) -> object:
         return self.func(*args, **kwargs)
 
 
@@ -54,7 +56,7 @@ def _evaluate_late_binding(orig_locals: dict[str, object]) -> None:
 
 
 def transform_tokens(tokens_iter: Iterable[tokenize.TokenInfo]) -> Generator[tokenize.TokenInfo, None, None]:
-    """Replaces '=>' with '= _PEP671_MARKER' in the token stream to mark where 'defer' objects should go."""
+    """Replaces '=>' with '= _DEFER_MARKER' in the token stream to mark where 'defer' objects should go."""
 
     peekable_tokens_iter = Peekable(tokens_iter)
     for tok in peekable_tokens_iter:
@@ -70,7 +72,7 @@ def transform_tokens(tokens_iter: Iterable[tokenize.TokenInfo]) -> Generator[tok
             start_col, start_row = peek.start
             new_start = (start_col, start_row + 1)
             new_end = (start_col, start_row + 15)
-            yield tokenize.TokenInfo(tokenize.NAME, "_PEP671_MARKER", new_start, new_end, tok.line)
+            yield tokenize.TokenInfo(tokenize.NAME, "_DEFER_MARKER", new_start, new_end, tok.line)
 
             # Fix the positions of the rest of the tokens on the same line.
             old_row = tok.start[0]
@@ -88,11 +90,16 @@ def transform_tokens(tokens_iter: Iterable[tokenize.TokenInfo]) -> Generator[tok
             yield tok
 
 
-def transform_source(src: str) -> str:
+def transform_source(source: Union[str, ReadableBuffer]) -> str:
     """Replaces late binding tokens with valid Python, along with markers for the ast transformer."""
 
-    tokens_gen = transform_tokens(tokenize.generate_tokens(StringIO(src).readline))
-    return tokenize.untokenize(tokens_gen)
+    if isinstance(source, str):
+        source = source.encode("utf-8")
+    stream = BytesIO(source)
+    encoding, _ = tokenize.detect_encoding(stream.readline)
+    stream.seek(0)
+    tokens_gen = transform_tokens(tokenize.tokenize(stream.readline))
+    return tokenize.untokenize(tokens_gen).decode(encoding)
 
 
 # === AST modification.
@@ -104,7 +111,7 @@ class LateBoundDefaultTransformer(ast.NodeTransformer):
         return (
             isinstance(potential_node, ast.Call)
             and isinstance(potential_node.func, ast.Name)
-            and potential_node.func.id == "_PEP671_MARKER"
+            and potential_node.func.id == "_DEFER_MARKER"
         )
 
     @staticmethod
@@ -165,11 +172,15 @@ class LateBoundDefaultTransformer(ast.NodeTransformer):
             )
         )
 
-        match node.body:
-            case [ast.Expr(value=ast.Constant(value=str())), *_]:
-                node.body.insert(1, evaluate_expr)
-            case _:
-                node.body.insert(0, evaluate_expr)
+        if (
+            node.body
+            and isinstance(node.body[0], ast.Expr)
+            and isinstance(node.body[0].value, ast.Constant)
+            and isinstance(node.body[0].value.value, str)
+        ):
+            node.body.insert(1, evaluate_expr)
+        else:
+            node.body.insert(0, evaluate_expr)
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> ast.AST:
         self._replace_late_bound_markers(node)
@@ -187,13 +198,18 @@ class LateBoundDefaultTransformer(ast.NodeTransformer):
         expect_docstring = True
         position = 0
         for sub_node in node.body:
-            match sub_node:
-                case ast.Expr(value=ast.Constant(value=str())) if expect_docstring:
-                    expect_docstring = False
-                case ast.ImportFrom(module="__future__", level=0):
-                    pass
-                case _:
-                    break
+            if (
+                expect_docstring
+                and isinstance(sub_node, ast.Expr)
+                and isinstance(sub_node.value, ast.Constant)
+                and isinstance(sub_node.value.value, str)
+            ):
+                expect_docstring = False
+            elif isinstance(sub_node, ast.ImportFrom) and sub_node.module == "__future__" and sub_node.level == 0:
+                pass
+            else:
+                break
+
             position += 1
 
         aliases = [ast.alias("_defer", "@defer"), ast.alias("_evaluate_late_binding", "@evaluate_late_binding")]
@@ -207,5 +223,22 @@ def transform_ast(tree: ast.AST) -> ast.Module:
     return ast.fix_missing_locations(LateBoundDefaultTransformer().visit(tree))
 
 
-def parse(source: str) -> ast.Module:
-    return transform_ast(ast.parse(transform_source(source)))
+# Some of the parameter annotations are wrong, but they should be "overriden" by this decorator.
+@copy_annotations(ast.parse)  # type: ignore
+def parse(
+    source: Union[str, ReadableBuffer],
+    filename: str = "<unknown>",
+    mode: str = "exec",
+    *,
+    type_comments: bool = False,
+    feature_version: Optional[Tuple[int, int]] = None,
+) -> ast.Module:
+    return transform_ast(
+        ast.parse(
+            transform_source(source),
+            filename,
+            mode,
+            type_comments=type_comments,
+            feature_version=feature_version,
+        )
+    )

@@ -23,7 +23,7 @@
 
 import enum
 import re
-from typing import Generator, MutableSet, Pattern, Tuple
+from typing import Generator, Pattern, Set, Tuple
 
 
 class TokenType(enum.Enum):
@@ -75,7 +75,7 @@ def _tokenize_pre_code(src: str) -> Generator[Tuple[TokenType, str], None, None]
             return
 
 
-def get_imported_experimental_flags(src: str) -> MutableSet[str]:
+def get_imported_experimental_flags(src: str) -> Set[str]:
     # Attempts were made to switch over to a tokenize-based version, but it was 10x slower.
     potential_flags: set[str] = set()
     for tok_type, line in _tokenize_pre_code(src):

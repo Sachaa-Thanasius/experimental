@@ -1,4 +1,4 @@
-"""An implementation of PEP 671 (late-bound function defaults) in "pure" Python."""
+"""An implementation of late-bound function defaults (PEP 671) in "pure" Python."""
 
 from __future__ import annotations
 
@@ -47,6 +47,8 @@ def _evaluate_late_binding(orig_locals: dict[str, object]) -> None:
     frame = sys._getframe(1)
     try:
         frame.f_locals.update(new_locals)
+        # To my knowledge, PyPy doesn't support ctypes.pythonapi (or this sort of frame usage, really).
+        # https://doc.pypy.org/en/latest/discussion/ctypes-implementation.html#discussion-and-limitations
         ctypes.pythonapi.PyFrame_LocalsToFast(ctypes.py_object(frame), ctypes.c_int(0))
     finally:
         del frame
@@ -55,10 +57,10 @@ def _evaluate_late_binding(orig_locals: dict[str, object]) -> None:
 # === Token modification.
 
 
-def transform_tokens(tokens_iter: Iterable[tokenize.TokenInfo]) -> Generator[tokenize.TokenInfo, None, None]:
+def transform_tokens(tokens: Iterable[tokenize.TokenInfo]) -> Generator[tokenize.TokenInfo, None, None]:
     """Replaces '=>' with '= _DEFER_MARKER' in the token stream to mark where 'defer' objects should go."""
 
-    peekable_tokens_iter = Peekable(tokens_iter)
+    peekable_tokens_iter = Peekable(tokens)
     for tok in peekable_tokens_iter:
         if (
             tok.exact_type == tokenize.EQUAL
@@ -213,7 +215,7 @@ class LateBoundDefaultTransformer(ast.NodeTransformer):
             position += 1
 
         aliases = [ast.alias("_defer", "@defer"), ast.alias("_evaluate_late_binding", "@evaluate_late_binding")]
-        imports = ast.ImportFrom(module="__experimental__.features._late_bound_arg_defaults", names=aliases, level=0)
+        imports = ast.ImportFrom(module="__experimental__._features.late_bound_arg_defaults", names=aliases, level=0)
         node.body.insert(position, imports)
 
         return self.generic_visit(node)
@@ -223,7 +225,7 @@ def transform_ast(tree: ast.AST) -> ast.Module:
     return ast.fix_missing_locations(LateBoundDefaultTransformer().visit(tree))
 
 
-# Some of the parameter annotations are wrong, but they should be "overriden" by this decorator.
+# Some of the parameter annotations are too narrow or wide, but they should be "overriden" by this decorator.
 @copy_annotations(ast.parse)  # type: ignore
 def parse(
     source: Union[str, ReadableBuffer],

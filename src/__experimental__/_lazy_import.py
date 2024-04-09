@@ -1,4 +1,8 @@
-"""A way to lazy-load blocks of regular import statements."""
+"""A way to lazy-load blocks of regular import statements.
+
+TODO: Consider making this a feature that acts on all imports in a module somehow.
+Might be as simple as changing the ast to insert from __experimental__ import lazy_module
+"""
 
 from __future__ import annotations
 
@@ -39,8 +43,9 @@ class _LazyFinder(importlib.abc.MetaPathFinder):
             raise ModuleNotFoundError(msg, name=fullname)
 
         if spec.loader is None:
-            msg = f"spec for {spec.name!r} is missing a loader"
-            raise ImportError(msg)
+            # Technically eager, but seems like the simplest path.
+            msg = "missing loader"
+            raise ImportError(msg, name=spec.name)
 
         spec.loader = importlib.util.LazyLoader(spec.loader)
         return spec
@@ -54,7 +59,7 @@ class lazy_module_import:
 
     Notes
     -----
-    This class is pretty simple: It adds a special finder to sys.meta_path and then removes it. That finder
+    This class is dead simple: It adds a special finder to sys.meta_path and then removes it. That finder
     wraps the loaders of imported modules with importlib.util.LazyLoader.
     """
 

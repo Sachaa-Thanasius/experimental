@@ -46,15 +46,16 @@ else:
 
 [tool.hatch.envs.test]
 dependencies = [
-    "astunparse; python_version<'3.9'",
     "coverage[toml]>=6.5",
+    "covdefaults",
     "pytest",
+    "typing_extensions",
 ]
 
 [tool.hatch.envs.test.scripts]
 test = "pytest {args:tests}"
 test-cov = "coverage run -m pytest {args:tests}"
-cov-report = ["- coverage combine", "coverage report --skip-empty"]
+cov-report = ["- coverage combine", "coverage report"]
 cov = ["test-cov", "cov-report"]
 
 [[tool.hatch.envs.test.matrix]]
@@ -64,19 +65,9 @@ python = ["3.8", "3.9", "3.10", "3.11", "3.12"]
 pythonpath = "src"
 addopts = ["--import-mode=importlib"]
 
-[tool.coverage.paths]
-__experimental__ = ["src/__experimental__"]
-tests = ["tests"]
-
 [tool.coverage.run]
-source_pkgs = ["__experimental__"]
-# Copied from elsewhere, structurally sound, not critical.
-omit = ["src/__experimental__/_peekable.py"]
-branch = true
-parallel = true
-
-[tool.coverage.report]
-exclude_lines = ["no cov", "if __name__ == .__main__:", "if TYPE_CHECKING:"]
+plugins = ["covdefaults"]
+omit = ["tests/sample_late_bound_arg.py"]
 
 # Linting-related config.
 
@@ -169,7 +160,7 @@ keep-runtime-typing = true
 
 [tool.pyright]
 include = ["src/__experimental__"]
-# ignore = ["tests"]
+ignore = ["tests"]
 pythonVersion = "3.8"
 typeCheckingMode = "strict"
 

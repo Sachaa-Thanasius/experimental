@@ -10,11 +10,14 @@ import tokenize
 from collections.abc import Callable, Iterable, Sequence
 from importlib._bootstrap import _call_with_frames_removed  # type: ignore # Has to come from importlib.
 from io import BytesIO
-from typing import TYPE_CHECKING, NamedTuple, Protocol, TypeVar, cast
+from typing import TYPE_CHECKING, NamedTuple, Protocol, Set, TypeVar, cast
 
+from __experimental__._features import (
+    inline_import as _inline_import,
+    late_bound_arg_defaults as _late_bound_arg_defaults,
+)
 from __experimental__._lazy_import import lazy_module_import
 from __experimental__._token_helper import get_imported_experimental_flags
-from __experimental__.features import _inline_import, _late_bound_arg_defaults
 
 if TYPE_CHECKING:
     import types
@@ -47,7 +50,19 @@ class _Transformers(NamedTuple):
 
 
 class _ExperimentalFeature:
-    """A feature class that attempts to emulate `__future__._Feature` to some degree."""
+    """A feature class that attempts to emulate `__future__._Feature` to some degree.
+
+    Attributes
+    ----------
+    name: str
+        The name of the feature.
+    date_added: str
+        A date in the format YYYY-MM-DD for when the feature was added to this package.
+    transformers: _Transformers
+        A collection of transformers used to implement the feature.
+    reference: str | None, default=None
+        A link to the inspiration or reference material for the feature, should it exist.
+    """
 
     __slots__ = ("name", "date_added", "transformers", "reference")
 
@@ -62,6 +77,7 @@ class _ExperimentalFeature:
         return f"_ExperimentalFeature(name={self.name}, date_added={self.date_added}{maybe_ref})"
 
 
+# FIXME: Fairly sure these clobber the corresponding imports.
 late_bound_arg_defaults = _ExperimentalFeature(
     "late_bound_arg_defaults",
     "2024.03.30",
@@ -94,7 +110,7 @@ class _ExperimentalFinder(importlib.abc.MetaPathFinder):
         path: Sequence[str] | None,
         target: types.ModuleType | None = None,
     ) -> importlib.machinery.ModuleSpec | None:
-        # Ensure that this is a source file we can actually rewrite. Inspired by pytest's finding logic.
+        # Ensure that this is a source file we can actually rewrite. Inspired by the pytest AssertionRewriter finding logic.
         spec = importlib.machinery.PathFinder.find_spec(fullname, path, target)
 
         if (
@@ -117,6 +133,7 @@ class _ExperimentalLoader(importlib.machinery.SourceFileLoader):
     def create_module(self, spec: importlib.machinery.ModuleSpec) -> types.ModuleType | None:
         """Use default semantics for module creation, for now."""
 
+    # Might need a typeshed question. SourceFileLoader generally only gets bytes as data.
     def source_to_code(  # type: ignore
         self,
         data: ReadableBuffer,
@@ -127,7 +144,7 @@ class _ExperimentalLoader(importlib.machinery.SourceFileLoader):
         source = importlib.util.decode_source(data)
 
         # Check if the code imports anything from __experimental__ and collect imported features.
-        collected_flags: set[str] = get_imported_experimental_flags(source)
+        collected_flags: Set[str] = get_imported_experimental_flags(source)
         features_to_activate: tuple[_ExperimentalFeature] = tuple(
             globals()[flag] for flag in collected_flags.intersection(all_feature_names)
         )

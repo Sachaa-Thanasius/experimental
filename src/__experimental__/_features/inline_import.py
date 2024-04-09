@@ -1,3 +1,5 @@
+"""An implementation of inline import expressions in pure python."""
+
 from __future__ import annotations
 
 import ast
@@ -6,6 +8,7 @@ from collections.abc import Iterable
 from io import BytesIO
 from typing import TYPE_CHECKING, Optional, Tuple, Union
 
+from __experimental__._peekable import Peekable
 from __experimental__._utils import copy_annotations
 
 if TYPE_CHECKING:
@@ -18,26 +21,36 @@ __all__ = ("transform_tokens", "transform_source", "transform_ast", "parse")
 
 
 def transform_tokens(tokens: Iterable[tokenize.TokenInfo]) -> list[tokenize.TokenInfo]:
+    # TODO: Somehow make this a generator and/or make signature consistent with other transform_tokens predicates.
     new_tokens: list[tokenize.TokenInfo] = []
 
-    tokens_iter = iter(tokens)
-    for tok in tokens_iter:
-        # ! is only an OP in 3.12+.
+    peekable_tokens_iter = Peekable(tokens)
+    for tok in peekable_tokens_iter:
+        # "!" is only an OP in >=3.12.
         if tok.type in {tokenize.OP, tokenize.ERRORTOKEN} and tok.string == "!":
-            # Collect all name and attribute access-related tokens directly connected to the !.
+            has_invalid_syntax = False
+
+            # Collect all name and attribute access-related tokens directly connected to the "!".
             last_place = len(new_tokens)
             looking_for_name = True
 
             for old_tok in reversed(new_tokens):
+                # TODO: Determine if this needs to be even stricter.
                 if old_tok.exact_type != (tokenize.NAME if looking_for_name else tokenize.DOT):
+                    has_invalid_syntax = (
+                        # The "!" was placed somewhere in a class definition, e.g. "class Fo!o: pass".
+                        (old_tok.exact_type == tokenize.NAME and old_tok.string == "class")
+                        # There's a name immediately following "!". Might be a f-string conversion flag
+                        # like "f'{thing!r}'" or just something invalid like "def fo!o(): pass".
+                        or (peekable_tokens_iter.has_more() and (peekable_tokens_iter.peek().type == tokenize.NAME))
+                    )
                     break
-                # if old_tok.exact_type not in {tokenize.DOT, tokenize.NAME}:
-                #     break
                 last_place -= 1
                 looking_for_name = not looking_for_name
 
-            # The question mark is just by itself. Let it error at the AST stage if it's wrong.
-            if last_place == len(new_tokens):
+            # The "!" is just by itself or in a bad spot. Let it error later if it's wrong.
+            # Also allows other token transformers to work with it without erroring early.
+            if has_invalid_syntax or last_place == len(new_tokens):
                 new_tokens.append(tok)
                 continue
 
@@ -73,7 +86,7 @@ def transform_tokens(tokens: Iterable[tokenize.TokenInfo]) -> list[tokenize.Toke
 
             old_row = end_paren_token.start[0]
 
-            for ltr_tok in tokens_iter:
+            for ltr_tok in peekable_tokens_iter:
                 if old_row != int(ltr_tok.start[0]):
                     after_tok = ltr_tok
                     break
@@ -146,7 +159,7 @@ def transform_ast(tree: ast.AST) -> ast.Module:
     return ast.fix_missing_locations(ImportExpressionTransformer().visit(tree))
 
 
-# Some of the parameter annotations are wrong, but they should be "overriden" by this decorator.
+# Some of the parameter annotations are too narrow or wide, but they should be "overriden" by this decorator.
 @copy_annotations(ast.parse)  # type: ignore
 def parse(
     source: Union[str, ReadableBuffer],

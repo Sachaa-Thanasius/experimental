@@ -6,7 +6,6 @@ if TYPE_CHECKING:
 
     class _GenericAlias:
         def __init__(self, *args: object, **kwargs: object): ...
-
         def __init_subclass__(cls, **kwargs: object) -> None: ...
 
     P = ParamSpec("P")
@@ -29,14 +28,16 @@ def copy_annotations(original_func: Callable[P, T]) -> Callable[[Callable[P, T]]
     return inner
 
 
-class PlaceholderGenericAlias(_GenericAlias, _root=True):
+# Hack for placeholders for special typing generic aliases that don't exist at runtime.
+# Modified from this: https://discuss.python.org/t/using-get-type-hints-with-cyclic-imports/44828/6
+class _PlaceholderGenericAlias(_GenericAlias, _root=True):
     def __repr__(self):
         return f"Circular import placeholder for {super().__repr__()}"
 
 
 class PlaceholderMeta(type):
     def __getitem__(self, item: object):
-        return PlaceholderGenericAlias(self, item)
+        return _PlaceholderGenericAlias(self, item)
 
     def __repr__(self):
         return f"Circular import placeholder for {super().__repr__()}"

@@ -158,13 +158,11 @@ def example_func(
     path = tmp_file.resolve()
 
     spec = importlib.util.spec_from_file_location(module_name, path, loader=_ExperimentalLoader(module_name, str(path)))
-    assert spec
-    assert spec.loader
-    sample_module = importlib.util.module_from_spec(spec)
-    sys.modules[module_name] = sample_module
-    spec.loader.exec_module(sample_module)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
 
-    example_func = sample_module.example_func
+    example_func = module.example_func
 
     z, a, b, c, d = example_func(2.0, 3)
     assert z == 2.0

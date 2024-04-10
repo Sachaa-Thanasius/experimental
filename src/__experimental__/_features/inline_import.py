@@ -117,7 +117,7 @@ def transform_source(source: Union[str, ReadableBuffer]) -> str:
 # === AST modification.
 
 
-class ImportExpressionTransformer(ast.NodeTransformer):
+class InlineImportTransformer(ast.NodeTransformer):
     @classmethod
     def _collapse_attributes(cls, node: Union[ast.Attribute, ast.Name]) -> str:
         if isinstance(node, ast.Name):
@@ -155,7 +155,7 @@ class ImportExpressionTransformer(ast.NodeTransformer):
 
 
 def transform_ast(tree: ast.AST) -> ast.Module:
-    return ast.fix_missing_locations(ImportExpressionTransformer().visit(tree))
+    return ast.fix_missing_locations(InlineImportTransformer().visit(tree))
 
 
 # Some of the parameter annotations are too narrow or wide, but they should be "overriden" by this decorator.

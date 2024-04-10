@@ -19,7 +19,6 @@ from typing import (
     Dict,
     Iterable,
     Optional,
-    Protocol,
     Sequence,
     Set,
     Tuple,
@@ -31,11 +30,13 @@ from typing import (
 from __experimental__._features import (
     inline_import as _inline_import,
     late_bound_arg_defaults as _late_bound_arg_defaults,
+    lazy_import as _lazy_import,
 )
 from __experimental__._utils.token_helper import get_imported_experimental_flags
 
 if TYPE_CHECKING:
     import types
+    from typing import Protocol
 
     from typing_extensions import Buffer as ReadableBuffer, ParamSpec, Self, TypeAlias
 
@@ -47,32 +48,40 @@ if TYPE_CHECKING:
 
     _call_with_frames_removed = cast(_CurryProtocol, _call_with_frames_removed)
 else:
-    ReadableBuffer = bytes
 
     class Self:
         pass
 
+    class TypeAlias:
+        pass
+
+    ReadableBuffer = bytes
+
 
 # Copied from _typeshed - this and ReadableBuffer were marked as stable.
-StrPath: "TypeAlias" = "str | os.PathLike[str]"
+StrPath: TypeAlias = "str | os.PathLike[str]"
 
-all_feature_names = ("late_bound_arg_defaults", "inline_import")
+all_feature_names = (
+    "late_bound_arg_defaults",
+    "inline_import",
+    "lazy_import",
+)
 
 
 class _Transformers:
-    __slots__ = ("source_hook", "token_hook", "ast_hook", "parse_hook")
+    __slots__ = ("source_hook", "token_hook", "ast_hook", "parse")
 
     def __init__(
         self,
         source_hook: Optional[Callable[[str], str]] = None,
         token_hook: Optional[Callable[[Iterable[tokenize.TokenInfo]], Iterable[tokenize.TokenInfo]]] = None,
         ast_hook: Optional[Callable[[ast.AST], ast.Module]] = None,
-        parse_hook: Optional[Callable[[str], ast.Module]] = None,
+        parse: Optional[Callable[[str], ast.Module]] = None,
     ):
         self.source_hook = source_hook
         self.token_hook = token_hook
         self.ast_hook = ast_hook
-        self.parse_hook = parse_hook
+        self.parse = parse
 
 
 class _ExperimentalFeature:
@@ -83,7 +92,7 @@ class _ExperimentalFeature:
     name: str
         The name of the feature.
     date_added: str
-        A date in the format YYYY-MM-DD for when the feature was added to this package.
+        A date in the format YYYY.MM.DD for when the feature was added to this package.
     transformers: _Transformers
         A collection of transformers used to implement the feature.
     reference: str | None, default=None
@@ -129,6 +138,18 @@ inline_import = _ExperimentalFeature(
     reference="https://github.com/ioistired/import-expression-parser",
 )
 
+lazy_import = _ExperimentalFeature(
+    "lazy_import",
+    "2024.04.10",
+    transformers=_Transformers(
+        None,
+        None,
+        _lazy_import.transform_ast,
+        _lazy_import.parse,
+    ),
+    reference="https://peps.python.org/pep-0690/",
+)
+
 
 class _ExperimentalFinder(importlib.abc.MetaPathFinder):
     def find_spec(
@@ -137,7 +158,8 @@ class _ExperimentalFinder(importlib.abc.MetaPathFinder):
         path: Optional[Sequence[str]],
         target: "Optional[types.ModuleType]" = None,
     ) -> Optional[importlib.machinery.ModuleSpec]:
-        # Ensure that this is a source file we can actually rewrite. Inspired by the pytest AssertionRewriter finding logic.
+        # Ensure that this is a source file we can actually rewrite.
+        # Method modified slightly from the pytest AssertionRewriteHook finding logic.
         spec = importlib.machinery.PathFinder.find_spec(fullname, path, target)
 
         if (

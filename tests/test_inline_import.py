@@ -1,6 +1,6 @@
 import ipaddress
-import typing
 import urllib.parse
+from typing import TYPE_CHECKING, Any, Dict
 
 import pytest
 from __experimental__._features import inline_import
@@ -32,7 +32,7 @@ def test_transform_source(test_source: str, expected_result: str) -> None:
         ("urllib.parse!.quote('?')", urllib.parse.quote("?")),
     ],
 )
-def test_parse(test_source: str, expected_result: typing.Any) -> None:
+def test_parse(test_source: str, expected_result: Any) -> None:
     tree = inline_import.parse(test_source, mode="eval")
     code = compile(tree, "<string>", "eval")
     result = eval(code)
@@ -51,7 +51,7 @@ def test_parse(test_source: str, expected_result: typing.Any) -> None:
         ("f'{value = !r:20}'", "value = 'Here I am'         "),
     ],
 )
-def test_regular_fstring(test_fstring: str, expected_result: typing.Any) -> None:
+def test_regular_fstring(test_fstring: str, expected_result: Any) -> None:
     globals_ = {"value": "Here I am"}
 
     tree = inline_import.parse(test_fstring, mode="eval")
@@ -98,7 +98,7 @@ def test_del_store_import(test_source: str) -> None:
 
 @pytest.mark.parametrize("test_source", ["del a!", "a! = 1", "del a.b!", "a.b! = 1"])
 def test_invalid_del_store_import(test_source: str) -> None:
-    # TODO: Change test so it doesn't hide why test_del_store_import is failing.
+    # TODO: Change test so it doesn't hide why test_del_store_import might fail.
 
     with pytest.raises(
         (
@@ -169,7 +169,7 @@ def test_kwargs() -> None:
     ],
 )
 def test_typehint_conversion(test_source: str, annotation_var: str) -> None:
-    globals_: typing.Dict[str, typing.Any] = {}
+    globals_: Dict[str, Any] = {}
 
     tree = inline_import.parse(test_source)
     code = compile(tree, "<string>", "exec")
@@ -177,7 +177,7 @@ def test_typehint_conversion(test_source: str, annotation_var: str) -> None:
 
     test_func = globals_["test_func"]
 
-    assert test_func.__annotations__[annotation_var] is typing.Any
+    assert test_func.__annotations__[annotation_var] is Any
 
 
 @pytest.mark.parametrize(
@@ -205,4 +205,4 @@ def test_importer_name_not_mangled() -> None:
 def test_bytes_input():
     tree = inline_import.parse(b"typing!.TYPE_CHECKING", mode="eval")
     code = compile(tree, "<string>", "eval")
-    assert eval(code) == typing.TYPE_CHECKING
+    assert eval(code) == TYPE_CHECKING

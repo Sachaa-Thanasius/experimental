@@ -42,15 +42,10 @@ else:
     __experimental__.install()
 """
 
-# Testing-related config.
+# ======== Testing-related config.
 
 [tool.hatch.envs.test]
-dependencies = [
-    "coverage[toml]>=6.5",
-    "covdefaults",
-    "pytest",
-    "typing_extensions",
-]
+dependencies = ["coverage[toml]>=6.5", "covdefaults", "pytest"]
 
 [tool.hatch.envs.test.scripts]
 test = "pytest {args:tests}"
@@ -72,7 +67,7 @@ omit = ["tests/sample_late_bound_arg.py"]
 [tool.coverage.report]
 fail_under = 70
 
-# Linting-related config.
+# ======== Linting-related config.
 
 [tool.ruff]
 include = ["src/__experimental__/*"]
@@ -118,7 +113,6 @@ ignore = [
     # "PLR2004", # Magic value comparison. May remove later.
     "SIM105", # Suppressable exception. contextlib.suppress is a stylistic choice with overhead.
     "C90",    # McCabe complexity memes.
-    # "PD011",  # Erroneous issue that triggers for any .values attribute access at all.
     "ANN101", # Type of self is usually implicit.
     "ANN102", # Type of cls is usually implicit.
     "ANN204", # Special method return types are usually implicit or known by type checker.
@@ -157,6 +151,8 @@ combine-as-imports = true
 
 [tool.ruff.lint.pyupgrade]
 keep-runtime-typing = true
+
+# ======== Type checking-related config.
 
 [tool.pyright]
 include = ["src/__experimental__"]

@@ -5,7 +5,7 @@ import time
 
 import pytest
 from __experimental__._features import lazy_import
-from __experimental__._main import _ExperimentalLoader
+from __experimental__.base import _ExperimentalLoader
 
 # FIXME: Make tests more comprehensive.
 
@@ -44,7 +44,7 @@ def test_nonexistent_import():
         import aaaaa  # noqa: F811
 
 
-def test_loader(tmp_path: pathlib.Path) -> None:
+def test_finder(tmp_path: pathlib.Path) -> None:
     sample_text = """\
 from __future__ import annotations
 

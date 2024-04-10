@@ -1,6 +1,5 @@
 from __experimental__._features.lazy_import import lazy_module_import
-from __experimental__._main import (
-    all_feature_names,
+from __experimental__.base import (
     inline_import,
     install,
     late_bound_arg_defaults,
@@ -8,10 +7,16 @@ from __experimental__._main import (
     uninstall,
 )
 
+all_feature_names = (
+    "inline_import",
+    "late_bound_arg_defaults",
+    "lazy_import",
+)
+
 __all__ = (
     "all_feature_names",
-    "late_bound_arg_defaults",
     "inline_import",
+    "late_bound_arg_defaults",
     "lazy_module_import",
     "lazy_import",
     "install",

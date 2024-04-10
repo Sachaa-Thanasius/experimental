@@ -61,12 +61,6 @@ else:
 # Copied from _typeshed - this and ReadableBuffer were marked as stable.
 StrPath: TypeAlias = "str | os.PathLike[str]"
 
-all_feature_names = (
-    "late_bound_arg_defaults",
-    "inline_import",
-    "lazy_import",
-)
-
 
 class _Transformers:
     __slots__ = ("source_hook", "token_hook", "ast_hook", "parse")
@@ -195,7 +189,8 @@ class _ExperimentalLoader(importlib.machinery.SourceFileLoader):
         # Check if the code imports anything from __experimental__ and collect imported features.
         collected_flags: Set[str] = get_imported_experimental_flags(source)
         features_to_activate: Tuple[_ExperimentalFeature, ...] = tuple(
-            _ExperimentalFeature._registry[flag] for flag in collected_flags.intersection(all_feature_names)
+            _ExperimentalFeature._registry[flag]
+            for flag in collected_flags.intersection(_ExperimentalFeature._registry.keys())
         )
 
         # If no flags are set, do normal compilation.

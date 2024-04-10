@@ -42,7 +42,8 @@ assert collections!.Counter("bccdddeeee") == {'e': 4, 'd': 3, 'c': 2, 'b': 1}
 """example3.py"""
 from __experimental__ import lazy_import
 
-# All module imports within this file henceforth should be performed lazily, i.e. delaying module load until accessing an attribute from the module.
+# All module imports within this file henceforth should be performed lazily,
+# i.e. delaying module load until accessing an attribute from the module.
 ...
 ```
 
@@ -50,12 +51,12 @@ from __experimental__ import lazy_import
 See the docstrings and comments in the code. They're currently a little bare, but they will improve over time.
 
 
-## Why
+## Why?
 It's fun. It's also a learning experience in manipulating Python via import hooks, AST transformations, token stream transformations, and more.
 
 
 ## Acknowledgements
-- aroberge's [ideas](https://github.com/aroberge/ideas), package which introduced me to the idea of modifying Python like this.
+- aroberge's [ideas](https://github.com/aroberge/ideas) package, which introduced me to the idea of modifying Python like this.
 - asottile's future packages, including things like [future-fstrings](https://github.com/asottile-archive/future-fstrings), that are practical applications showcasing the usefulness of these kinds of transformations ("memes" though they may be).
 - RocketRace's [hoopy](https://github.com/RocketRace/hoopy) and [custom-literals](https://github.com/RocketRace/custom-literals) packages, which are much more interesting, complex, and featured Python manipulations.
 - Those who wrote the original PEPs and packages that this attempts to (re)implement (see the links in the overview).

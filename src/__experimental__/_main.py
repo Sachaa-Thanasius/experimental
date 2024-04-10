@@ -1,4 +1,7 @@
-from __future__ import annotations
+"""The main residence of the feature objects and overarching import logic.
+
+TODO: Consider making the features even more plugin-like.
+"""
 
 import ast
 import importlib.abc
@@ -7,10 +10,23 @@ import importlib.util
 import os
 import sys
 import tokenize
-from collections.abc import Callable, Iterable, Sequence
 from importlib._bootstrap import _call_with_frames_removed  # type: ignore # Has to come from importlib.
 from io import BytesIO
-from typing import TYPE_CHECKING, Protocol, Set, TypeVar, cast
+from typing import (
+    TYPE_CHECKING,
+    Callable,
+    ClassVar,
+    Dict,
+    Iterable,
+    Optional,
+    Protocol,
+    Sequence,
+    Set,
+    Tuple,
+    TypeVar,
+    Union,
+    cast,
+)
 
 from __experimental__._features import (
     inline_import as _inline_import,
@@ -21,7 +37,7 @@ from __experimental__._utils.token_helper import get_imported_experimental_flags
 if TYPE_CHECKING:
     import types
 
-    from typing_extensions import Buffer as ReadableBuffer, ParamSpec, TypeAlias
+    from typing_extensions import Buffer as ReadableBuffer, ParamSpec, Self, TypeAlias
 
     T = TypeVar("T")
     P = ParamSpec("P")
@@ -30,28 +46,33 @@ if TYPE_CHECKING:
         def __call__(self, func: Callable[P, T], *args: P.args, **kwargs: P.kwargs) -> T: ...
 
     _call_with_frames_removed = cast(_CurryProtocol, _call_with_frames_removed)
+else:
+    ReadableBuffer = bytes
+
+    class Self:
+        pass
 
 
 # Copied from _typeshed - this and ReadableBuffer were marked as stable.
-StrPath: TypeAlias = "str | os.PathLike[str]"
+StrPath: "TypeAlias" = "str | os.PathLike[str]"
 
 all_feature_names = ("late_bound_arg_defaults", "inline_import")
 
 
 class _Transformers:
-    __slots__ = ("source", "token", "ast", "parse")
+    __slots__ = ("source_hook", "token_hook", "ast_hook", "parse_hook")
 
     def __init__(
         self,
-        source: Callable[[str], str] | None = None,
-        token: Callable[[Iterable[tokenize.TokenInfo]], Iterable[tokenize.TokenInfo]] | None = None,
-        ast: Callable[[ast.AST], ast.Module] | None = None,
-        parse: Callable[[str], ast.Module] | None = None,
+        source_hook: Optional[Callable[[str], str]] = None,
+        token_hook: Optional[Callable[[Iterable[tokenize.TokenInfo]], Iterable[tokenize.TokenInfo]]] = None,
+        ast_hook: Optional[Callable[[ast.AST], ast.Module]] = None,
+        parse_hook: Optional[Callable[[str], ast.Module]] = None,
     ):
-        self.source = source
-        self.token = token
-        self.ast = ast
-        self.parse = parse
+        self.source_hook = source_hook
+        self.token_hook = token_hook
+        self.ast_hook = ast_hook
+        self.parse_hook = parse_hook
 
 
 class _ExperimentalFeature:
@@ -70,12 +91,14 @@ class _ExperimentalFeature:
     """
 
     __slots__ = ("name", "date_added", "transformers", "reference")
+    _registry: ClassVar[Dict[str, Self]] = {}
 
-    def __init__(self, name: str, date_added: str, *, transformers: _Transformers, reference: str | None = None):
+    def __init__(self, name: str, date_added: str, *, transformers: _Transformers, reference: Optional[str] = None):
         self.name = name
         self.date_added = date_added
         self.transformers = transformers
         self.reference = reference
+        self._registry[name] = self
 
     def __repr__(self) -> str:
         maybe_ref = f", reference={self.reference}" if self.reference else ""
@@ -111,9 +134,9 @@ class _ExperimentalFinder(importlib.abc.MetaPathFinder):
     def find_spec(
         self,
         fullname: str,
-        path: Sequence[str] | None,
-        target: types.ModuleType | None = None,
-    ) -> importlib.machinery.ModuleSpec | None:
+        path: Optional[Sequence[str]],
+        target: "Optional[types.ModuleType]" = None,
+    ) -> Optional[importlib.machinery.ModuleSpec]:
         # Ensure that this is a source file we can actually rewrite. Inspired by the pytest AssertionRewriter finding logic.
         spec = importlib.machinery.PathFinder.find_spec(fullname, path, target)
 
@@ -134,23 +157,23 @@ class _ExperimentalFinder(importlib.abc.MetaPathFinder):
 
 
 class _ExperimentalLoader(importlib.machinery.SourceFileLoader):
-    def create_module(self, spec: importlib.machinery.ModuleSpec) -> types.ModuleType | None:
+    def create_module(self, spec: importlib.machinery.ModuleSpec) -> "Optional[types.ModuleType]":
         """Use default semantics for module creation, for now."""
 
     # Might need a typeshed question. SourceFileLoader generally only gets bytes as data.
     def source_to_code(  # type: ignore
         self,
         data: ReadableBuffer,
-        path: ReadableBuffer | StrPath,
+        path: Union[ReadableBuffer, StrPath],
         *,
         _optimize: int = -1,
-    ) -> types.CodeType:
+    ) -> "types.CodeType":
         source = importlib.util.decode_source(data)
 
         # Check if the code imports anything from __experimental__ and collect imported features.
         collected_flags: Set[str] = get_imported_experimental_flags(source)
-        features_to_activate: tuple[_ExperimentalFeature] = tuple(
-            globals()[flag] for flag in collected_flags.intersection(all_feature_names)
+        features_to_activate: Tuple[_ExperimentalFeature, ...] = tuple(
+            _ExperimentalFeature._registry[flag] for flag in collected_flags.intersection(all_feature_names)
         )
 
         # If no flags are set, do normal compilation.
@@ -161,8 +184,8 @@ class _ExperimentalLoader(importlib.machinery.SourceFileLoader):
         tokens = tokenize.tokenize(BytesIO(data).readline)
 
         for feature in features_to_activate:
-            if feature.transformers.token:
-                tokens = feature.transformers.token(tokens)
+            if feature.transformers.token_hook:
+                tokens = feature.transformers.token_hook(tokens)
 
         # The source should be syntactically valid now as far as we're concerned.
         source = tokenize.untokenize(tokens)
@@ -179,8 +202,8 @@ class _ExperimentalLoader(importlib.machinery.SourceFileLoader):
         )
 
         for feature in features_to_activate:
-            if feature.transformers.ast:
-                tree = feature.transformers.ast(tree)
+            if feature.transformers.ast_hook:
+                tree = feature.transformers.ast_hook(tree)
 
         # Always perform the normal compilation step.
         return _call_with_frames_removed(compile, tree, path, "exec", dont_inherit=True, optimize=_optimize)

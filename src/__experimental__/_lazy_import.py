@@ -4,14 +4,11 @@ TODO: Consider making this a feature that acts on all imports in a module someho
 Might be as simple as changing the ast to insert from __experimental__ import lazy_module
 """
 
-from __future__ import annotations
-
 import importlib.abc
 import importlib.machinery
 import importlib.util
 import sys
-from collections.abc import Sequence
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional, Sequence
 
 if TYPE_CHECKING:
     import types
@@ -29,8 +26,8 @@ class _LazyFinder(importlib.abc.MetaPathFinder):
     def find_spec(
         self,
         fullname: str,
-        path: Sequence[str] | None,
-        target: types.ModuleType | None = None,
+        path: Optional[Sequence[str]],
+        target: "Optional[types.ModuleType]" = None,
         /,
     ) -> importlib.machinery.ModuleSpec:
         for finder in sys.meta_path:

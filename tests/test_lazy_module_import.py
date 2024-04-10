@@ -50,11 +50,11 @@ def test_nonexistent_import():
 
     with pytest.raises(ModuleNotFoundError):  # noqa: SIM117
         with lazy_import.lazy_module_import():
-            import aaaaa
+            import aaaaa  # noqa: F811
 
     # Things should go back to normal.
     with pytest.raises(ModuleNotFoundError):
-        import aaaaa
+        import aaaaa  # noqa: F811
 
 
 def test_regular_import():

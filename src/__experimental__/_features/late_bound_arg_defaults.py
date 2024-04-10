@@ -1,21 +1,25 @@
 """An implementation of late-bound function defaults (PEP 671) in "pure" Python."""
 
-from __future__ import annotations
-
 import ast
 import ctypes
 import sys
 import tokenize
-from collections.abc import Callable, Generator, Iterable
 from io import BytesIO
 from itertools import takewhile
-from typing import TYPE_CHECKING, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Callable, Dict, Generator, Iterable, List, Optional, Tuple, Union
 
 from __experimental__._utils.misc import copy_annotations
 from __experimental__._utils.peekable import Peekable
 
 if TYPE_CHECKING:
     from typing_extensions import Buffer as ReadableBuffer, TypeGuard
+else:
+    from __experimental__._utils.misc import PlaceholderMeta
+
+    class TypeGuard(metaclass=PlaceholderMeta):
+        pass
+
+    ReadableBuffer = bytes
 
 
 __all__ = ("transform_tokens", "transform_source", "transform_ast", "parse")
@@ -34,7 +38,7 @@ class _defer:
         return self.func(*args, **kwargs)
 
 
-def _evaluate_late_binding(orig_locals: dict[str, object]) -> None:
+def _evaluate_late_binding(orig_locals: Dict[str, object]) -> None:
     """Does the actual work of evaluating the late bindings and assigning them to the locals."""
 
     # Evaluate the late-bound function argument defaults (i.e. those with type `_defer`).
@@ -117,7 +121,7 @@ class LateBoundDefaultTransformer(ast.NodeTransformer):
         )
 
     @staticmethod
-    def _replace_marker_node(node: ast.Call, index: int, all_previous_args: list[ast.arg]) -> ast.Call:
+    def _replace_marker_node(node: ast.Call, index: int, all_previous_args: List[ast.arg]) -> ast.Call:
         lambda_arg_names = [arg.arg for arg in all_previous_args[:index]]
         new_lambda = ast.Lambda(
             args=ast.arguments(
@@ -131,7 +135,7 @@ class LateBoundDefaultTransformer(ast.NodeTransformer):
         )
         return ast.Call(func=ast.Name(id="@defer", ctx=ast.Load()), args=[new_lambda], keywords=[])
 
-    def _replace_late_bound_markers(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
+    def _replace_late_bound_markers(self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef]) -> None:
         # Replace the markers in the function defaults with actual defer objects.
         all_func_defaults = node.args.defaults + node.args.kw_defaults
         try:
@@ -164,7 +168,7 @@ class LateBoundDefaultTransformer(ast.NodeTransformer):
             actual_index = index + kw_default_offset
             node.args.kw_defaults[index] = self._replace_marker_node(marker, actual_index, all_args)
 
-    def _add_late_binding_evaluate_call(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
+    def _add_late_binding_evaluate_call(self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef]) -> None:
         # Put a call to evaluate the defer objects, the late bindings, as the first line of the function.
         evaluate_expr = ast.Expr(
             value=ast.Call(

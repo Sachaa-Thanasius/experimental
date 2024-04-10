@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 name = "experimental"
 description = "A package with some experimental code transformations activated via '__future__'-like imports."
 requires-python = ">=3.8"
-version = "2024.04.04"
+version = "2024.04.09"
 readme = "README.md"
 license = "MIT"
 authors = [
@@ -125,9 +125,6 @@ ignore = [
     "ANN401", # Need Any for some cases.
     "A002",   # A little built-in shadowing.
     "ERA001", # Ignore commented code for now.
-    # Allow messages in exception class calls.
-    # "TRY003",
-    # "EM101",
     # Recommended by Ruff when using Ruff format.
     "E111",
     "E114",

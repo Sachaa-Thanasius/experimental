@@ -52,24 +52,24 @@ NAMES = rf"\((?:\s+|,|{NAME}|{ESCAPED_NL}|{COMMENT})*\)"
 STRING = rf"{PREFIX}(?:{DOUBLE_3}|{SINGLE_3}|{DOUBLE_1}|{SINGLE_1})"
 
 
-def create_pattern(base: str, pats: Tuple[str, ...]) -> Pattern[str]:
+def _create_pattern(base: str, pats: Tuple[str, ...]) -> Pattern[str]:
     return re.compile(rf'{base}(?:{"|".join(pats)})*({COMMENT})?(?:\n|$)')
 
 
 TOKENIZE: Tuple[Tuple[TokenType, Pattern[str]], ...] = (
-    (TokenType.IMPORT, create_pattern(IMPORT, (WS, NAME, OP, ESCAPED_NL, NAMES))),
-    (TokenType.NEWLINE, create_pattern(EMPTY, ())),
-    (TokenType.STRING, create_pattern(STRING, (WS, STRING, ESCAPED_NL))),
+    (TokenType.IMPORT, _create_pattern(IMPORT, (WS, NAME, OP, ESCAPED_NL, NAMES))),
+    (TokenType.NEWLINE, _create_pattern(EMPTY, ())),
+    (TokenType.STRING, _create_pattern(STRING, (WS, STRING, ESCAPED_NL))),
 )
 
 _FROM_EXPERIMENTAL = "from __experimental__ import "
 
 
-def _tokenize_pre_code(src: str) -> Generator[Tuple[TokenType, str], None, None]:
+def _tokenize_pre_code(source: str) -> Generator[Tuple[TokenType, str], None, None]:
     pos = 0
     while True:
         for tp, reg in TOKENIZE:
-            if match := reg.match(src, pos):
+            if match := reg.match(source, pos):
                 yield (tp, match[0])
                 pos = match.end()
                 break
@@ -77,12 +77,12 @@ def _tokenize_pre_code(src: str) -> Generator[Tuple[TokenType, str], None, None]
             return
 
 
-def get_imported_experimental_flags(src: str) -> Set[str]:
+def get_imported_experimental_flags(source: str) -> Set[str]:
     """Find all the imports from __experimental__ that were made at the top of a Python file."""
 
     # Attempts were made to switch over to a tokenize-based version, but it was 10x slower.
     potential_flags: set[str] = set()
-    for tok_type, line in _tokenize_pre_code(src):
+    for tok_type, line in _tokenize_pre_code(source):
         if tok_type is TokenType.IMPORT and line.startswith(_FROM_EXPERIMENTAL):
             potential_line = re.sub(COMMENT, "", line[len(_FROM_EXPERIMENTAL) :])
             for name in re.finditer(NAME, potential_line):

@@ -1,18 +1,17 @@
 """An implementation of inline import expressions in pure python."""
 
-from __future__ import annotations
-
 import ast
 import tokenize
-from collections.abc import Iterable
 from io import BytesIO
-from typing import TYPE_CHECKING, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Iterable, List, Optional, Tuple, Union
 
 from __experimental__._utils.misc import copy_annotations
 from __experimental__._utils.peekable import Peekable
 
 if TYPE_CHECKING:
     from typing_extensions import Buffer as ReadableBuffer
+else:
+    ReadableBuffer = bytes
 
 __all__ = ("transform_tokens", "transform_source", "transform_ast", "parse")
 
@@ -20,7 +19,7 @@ __all__ = ("transform_tokens", "transform_source", "transform_ast", "parse")
 # === Token modification.
 
 
-def transform_tokens(tokens: Iterable[tokenize.TokenInfo]) -> list[tokenize.TokenInfo]:
+def transform_tokens(tokens: Iterable[tokenize.TokenInfo]) -> List[tokenize.TokenInfo]:
     # TODO: Somehow make this a generator and/or make signature consistent with other transform_tokens predicates.
     new_tokens: list[tokenize.TokenInfo] = []
 
@@ -82,7 +81,7 @@ def transform_tokens(tokens: Iterable[tokenize.TokenInfo]) -> list[tokenize.Toke
 
             # Fix the positions of the rest of the tokens on the same line.
             fixed_tokens: list[tokenize.TokenInfo] = []
-            after_tok: tokenize.TokenInfo | None = None
+            after_tok: Optional[tokenize.TokenInfo] = None
 
             old_row = end_paren_token.start[0]
 
@@ -120,7 +119,7 @@ def transform_source(source: Union[str, ReadableBuffer]) -> str:
 
 class ImportExpressionTransformer(ast.NodeTransformer):
     @classmethod
-    def _collapse_attributes(cls, node: ast.Attribute | ast.Name) -> str:
+    def _collapse_attributes(cls, node: Union[ast.Attribute, ast.Name]) -> str:
         if isinstance(node, ast.Name):
             return node.id
 

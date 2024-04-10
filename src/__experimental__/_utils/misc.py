@@ -4,8 +4,15 @@ from typing import TYPE_CHECKING, Callable, TypeVar
 if TYPE_CHECKING:
     from typing_extensions import ParamSpec
 
+    class _GenericAlias:
+        def __init__(self, *args: object, **kwargs: object): ...
+
+        def __init_subclass__(cls, **kwargs: object) -> None: ...
+
     P = ParamSpec("P")
 else:
+    from typing import _GenericAlias
+
     P = [TypeVar("P")]
 
 T = TypeVar("T")
@@ -20,3 +27,16 @@ def copy_annotations(original_func: Callable[P, T]) -> Callable[[Callable[P, T]]
         return new_func
 
     return inner
+
+
+class PlaceholderGenericAlias(_GenericAlias, _root=True):
+    def __repr__(self):
+        return f"Circular import placeholder for {super().__repr__()}"
+
+
+class PlaceholderMeta(type):
+    def __getitem__(self, item: object):
+        return PlaceholderGenericAlias(self, item)
+
+    def __repr__(self):
+        return f"Circular import placeholder for {super().__repr__()}"

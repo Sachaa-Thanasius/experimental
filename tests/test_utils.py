@@ -1,4 +1,4 @@
-from typing import Set
+import typing
 
 import pytest
 from __experimental__._utils.token_helper import get_imported_experimental_flags
@@ -14,17 +14,14 @@ from __experimental__._utils.token_helper import get_imported_experimental_flags
             id="only import",
         ),
         pytest.param(
-            "from __future__ import annotations\n"
-            "from __experimental__ import inline_import\n",
+            "from __future__ import annotations\nfrom __experimental__ import inline_import\n",
             {"inline_import"},
-            id="experimental after future import"
+            id="experimental after future import",
         ),
         pytest.param(
-            "'''module docstring'''\n"
-            "\n"
-            "from __experimental__ import inline_import\n",
+            "'''module docstring'''\n\nfrom __experimental__ import inline_import\n",
             {"inline_import"},
-            id="module docstring before"
+            id="module docstring before",
         ),
         pytest.param(
             "'''module docstring'''\n"
@@ -32,7 +29,7 @@ from __experimental__._utils.token_helper import get_imported_experimental_flags
             "from __experimental__ import inline_import # comment here\n"
             "# Another comment here\n",
             {"inline_import"},
-            id="with inline comments"
+            id="with inline comments",
         ),
         pytest.param(
             "from __future__ import annotations\n"
@@ -42,12 +39,12 @@ from __experimental__._utils.token_helper import get_imported_experimental_flags
             "\n"
             "from __experimental__ import late_bound_arg_defaults\n",
             {"late_bound_arg_defaults"},
-            id="after multiple imports"
+            id="after multiple imports",
         ),
         pytest.param(
             "from __experimental__ import late_bound_arg_defaults, inline_import\n",
             {"inline_import", "late_bound_arg_defaults"},
-            id="with multiple features"
+            id="with multiple features",
         ),
         pytest.param(
             "from __experimental__ import (\n"
@@ -55,29 +52,20 @@ from __experimental__._utils.token_helper import get_imported_experimental_flags
             "   inline_import,  # comment 2\n"
             ")\n",
             {"inline_import", "late_bound_arg_defaults"},
-            id="with multiple features parenthesized and comments"
+            id="with multiple features parenthesized and comments",
         ),
         pytest.param(
-            "import a\n"
-            "\n"
-            "def hello_world() -> None: pass\n"
-            "\n"
-            "from __experimental__ import inline_import",
+            "import a\n\ndef hello_world() -> None: pass\n\nfrom __experimental__ import inline_import",
             set(),
-            id="stops at first function"
+            id="stops at first function",
         ),
         pytest.param(
-            "import a\n"
-            "\n"
-            "class Hello: pass\n"
-            "\n"
-            "from __experimental__ import inline_import",
+            "import a\n\nclass Hello: pass\n\nfrom __experimental__ import inline_import",
             set(),
-            id="stops at first class"
+            id="stops at first class",
         ),
-        
     ],
 )
-def test_get_imported_experimental_flags(test_source: str, expected_result: Set[str]) -> None:
+def test_get_imported_experimental_flags(test_source: str, expected_result: typing.Set[str]) -> None:
     result = get_imported_experimental_flags(test_source)
     assert result == expected_result, f"{result=}, {expected_result}"

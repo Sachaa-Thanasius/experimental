@@ -4,9 +4,11 @@ import ast
 import ctypes
 import sys
 import tokenize
+from functools import partial
 from io import BytesIO
 from itertools import takewhile
-from typing import TYPE_CHECKING, Callable, Dict, Generator, Iterable, List, Optional, Tuple, Union
+from operator import is_not
+from typing import TYPE_CHECKING, Callable, Dict, Generator, Iterable, List, Optional, Tuple, Union, final
 
 from __experimental__._utils.misc import copy_annotations
 from __experimental__._utils.peekable import Peekable
@@ -28,6 +30,7 @@ __all__ = ("transform_tokens", "transform_source", "transform_ast", "parse")
 # === The parts that will actually do the work of implementing late binding argument defaults.
 
 
+@final
 class _defer:
     """A class that holds the functions used for late binding in function signatures."""
 
@@ -36,7 +39,7 @@ class _defer:
     def __init__(self, func: Callable[..., object], /):
         self.func = func
 
-    def __call__(self, *args: object, **kwargs: object) -> object:
+    def __call__(self, /, *args: object, **kwargs: object) -> object:
         return self.func(*args, **kwargs)
 
 
@@ -44,13 +47,13 @@ def _evaluate_late_binding(orig_locals: Dict[str, object]) -> None:
     """Does the actual work of evaluating the late bindings and assigning them to the locals."""
 
     # Evaluate the late-bound function argument defaults (i.e. those with type `_defer`).
-    def _defer_filter(val: object) -> bool:
-        return not isinstance(val, _defer)
-
     new_locals = orig_locals.copy()
+    new_locals_values = new_locals.values()  # Micro-optimization.
+
     for arg_name, arg_val in orig_locals.items():
-        if isinstance(arg_val, _defer):
-            new_locals[arg_name] = arg_val(*takewhile(_defer_filter, new_locals.values()))
+        if type(arg_val) is _defer:
+            # partial(is_not, ...) is another micro-optimization.
+            new_locals[arg_name] = arg_val(*takewhile(partial(is_not, arg_val), new_locals_values))
 
     # Update the locals of the last frame with these new evaluated defaults.
     frame = sys._getframe(1)

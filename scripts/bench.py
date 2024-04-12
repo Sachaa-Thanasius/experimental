@@ -4,7 +4,7 @@ from typing import Callable, List, Optional, Tuple
 
 from __experimental__._features.late_bound_arg_defaults import _defer, _evaluate_late_binding
 
-# ====== We'll be benchmarking the desugared version of this:
+# ======== We'll be benchmarking the desugared version of this:
 
 # def example(
 #     a: int,
@@ -51,7 +51,7 @@ def example_none_idiom(
     return c, e
 
 
-# ====== The functions that do the "benchmarking".
+# ======== The functions that do the "benchmarking".
 
 
 def run_timer(iterations: int) -> None:
@@ -90,7 +90,7 @@ def main() -> None:
     )
     parser.add_argument("-b", "--benchmark", action="store_true")
     parser.add_argument("-p", "--profile", action="store_true")
-    parser.add_argument("-i", "--iterations", default=750_000, type=int)
+    parser.add_argument("-i", "--iterations", default=1_000_000, type=int)
 
     args = parser.parse_args()
 
@@ -99,16 +99,18 @@ def main() -> None:
         raise RuntimeError(msg)
 
     iterations = args.iterations
+    print(f"Iterations = {iterations}")
 
     if args.benchmark:
         print("============ Timing ============")
         run_timer(iterations)
-        # TODO: Make late_bound_arg_defaults faster somehow, because 22x slower is terrible.
+
+        # TODO: Make late_bound_arg_defaults faster somehow, because 20x slower is terrible.
         #
-        # iterations = 750,000
+        # Iterations = 1,000,000
         # ============ Timing ============
-        # With call:                2.295235194993438
-        # With None sentinel idiom: 0.10595109898713417
+        # With call:                2.823724805988604
+        # With None sentinel idiom: 0.14172109999344684
 
     if args.profile:
         print("============ Profiling ============")

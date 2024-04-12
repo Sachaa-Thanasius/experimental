@@ -6,7 +6,7 @@ This is a personal `__future__`-like collection of features that will only be ac
 - Late-bound function argument defaults
     - Based on [PEP 671](https://peps.python.org/pep-0671/)
 - Module-level and context manager-level lazy imports
-    - Based on [PEP 690](https://peps.python.org/pep-0690/) and a whole bunch of other attempts at lazy loading.
+    - Based on [PEP 690](https://peps.python.org/pep-0690/) and a whole bunch of other attempts at lazy importing.
 - Inline import expressions
     - Based on [import-expression](https://github.com/ioistired/import-expression-parser)
 

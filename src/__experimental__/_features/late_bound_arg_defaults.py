@@ -31,7 +31,9 @@ __all__ = ("transform_tokens", "transform_source", "transform_ast", "parse")
 class _defer:
     """A class that holds the functions used for late binding in function signatures."""
 
-    def __init__(self, func: Callable[..., object]):
+    __slots__ = ("func",)
+
+    def __init__(self, func: Callable[..., object], /):
         self.func = func
 
     def __call__(self, *args: object, **kwargs: object) -> object:

@@ -59,7 +59,7 @@ else:
 
 
 # Copied from _typeshed - this and ReadableBuffer were marked as stable.
-StrPath: TypeAlias = "str | os.PathLike[str]"
+StrPath: TypeAlias = "Union[str, os.PathLike[str]]"
 
 
 class _Transformers:
@@ -97,10 +97,10 @@ class _ExperimentalFeature:
     _registry: ClassVar[Dict[str, Self]] = {}
 
     def __init__(self, name: str, date_added: str, *, transformers: _Transformers, reference: Optional[str] = None):
-        self.name = name
-        self.date_added = date_added
-        self.transformers = transformers
-        self.reference = reference
+        self.name: str = name
+        self.date_added: str = date_added
+        self.transformers: _Transformers = transformers
+        self.reference: Optional[str] = reference
         self._registry[name] = self
 
     def __repr__(self) -> str:

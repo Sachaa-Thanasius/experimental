@@ -4,8 +4,8 @@ import sys
 import time
 
 import pytest
+from __experimental__._base import _ExperimentalLoader
 from __experimental__._features import lazy_import
-from __experimental__.base import _ExperimentalLoader
 
 # FIXME: Make tests more comprehensive.
 

@@ -145,6 +145,12 @@ unfixable = [
     "S102",    # Use of exec.
     "S307",    # Use of eval.
 ]
+"scripts/*" = [
+    "T201",    # Printing is fine.
+    "ANN",     # Don't need many type annotations.
+    "PLR0913", # Too many parameters.
+    "INP001",  # No __init__.py
+]
 
 [tool.ruff.lint.isort]
 combine-as-imports = true

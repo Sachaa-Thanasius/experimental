@@ -44,10 +44,13 @@ def _evaluate_late_binding(orig_locals: Dict[str, object]) -> None:
     """Does the actual work of evaluating the late bindings and assigning them to the locals."""
 
     # Evaluate the late-bound function argument defaults (i.e. those with type `_defer`).
+    def _defer_filter(val: object) -> bool:
+        return not isinstance(val, _defer)
+
     new_locals = orig_locals.copy()
     for arg_name, arg_val in orig_locals.items():
         if isinstance(arg_val, _defer):
-            new_locals[arg_name] = arg_val(*takewhile(lambda val: not isinstance(val, _defer), new_locals.values()))
+            new_locals[arg_name] = arg_val(*takewhile(_defer_filter, new_locals.values()))
 
     # Update the locals of the last frame with these new evaluated defaults.
     frame = sys._getframe(1)

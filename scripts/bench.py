@@ -1,15 +1,12 @@
-"""A small script for timing the late bound arg defaults against the current sentinel idiom."""
+"""A small script for timing the late bound arg defaults against the normal sentinel idiom."""
 
-import ctypes
-import sys
-from itertools import takewhile
 from typing import Callable, List, Optional, Tuple
 
 from __experimental__._features.late_bound_arg_defaults import _defer, _evaluate_late_binding
 
-# ====== Everything below this comment is the desugared version of this:
+# ====== We'll be benchmarking the desugared version of this:
 
-# def example_called(
+# def example(
 #     a: int,
 #     b: float = 1.0,
 #     /,
@@ -34,41 +31,6 @@ def example_called(
     e: int = _defer(lambda a, b, ex, c, d: len(c)),  # type: ignore
 ) -> Tuple[List[object], int]:
     _evaluate_late_binding(locals())
-    return c, e
-
-
-def example_inlined(
-    a: int,
-    b: float = 1.0,
-    /,
-    ex: str = "hello",
-    *,
-    c: List[object] = _defer(lambda a, b, ex: ["Preceding args", a, b, ex]),  # type: ignore # noqa: B008
-    d: bool = False,
-    e: int = _defer(lambda a, b, ex, c, d: len(c)),  # type: ignore
-) -> Tuple[List[object], int]:
-    new_locals = locals().copy()
-    for arg_name, arg_val in new_locals.items():
-        if isinstance(arg_val, _defer):
-            new_locals[arg_name] = arg_val(*takewhile(lambda val: not isinstance(val, _defer), new_locals.values()))
-
-    frame = sys._getframe()
-    try:
-        frame.f_locals.update(new_locals)
-        ctypes.pythonapi.PyFrame_LocalsToFast(ctypes.py_object(frame), ctypes.c_int(0))
-    finally:
-        del frame
-
-    del new_locals
-    try:
-        del arg_name  # type: ignore
-    except UnboundLocalError:
-        pass
-    try:
-        del arg_val  # type: ignore
-    except UnboundLocalError:
-        pass
-
     return c, e
 
 
@@ -98,9 +60,9 @@ def run_timer(iterations: int) -> None:
 
     expected_result = (["Preceding args", 1, 1.0, "hello"], 4)
 
-    for text, callback in zip(
-        (f"With call:{' ' * 15}", f"With inlining:{' ' * 11}", "With None sentinel idiom:"),
-        (example_called, example_inlined, example_none_idiom),
+    for text, callback in (
+        (f"With call:{' ' * 15}", example_called),
+        ("With None sentinel idiom:", example_none_idiom),
     ):
         test_callback = partial(callback, 1)
         assert test_callback() == expected_result
@@ -115,15 +77,16 @@ def profile_func(callback: Callable[..., object], iterations: int):
 def run_profiler(iterations: int):
     import cProfile
 
-    for callback in ("example_called", "example_inlined", "example_none_idiom"):
-        cProfile.run(f"profile_func({callback}, {iterations})")
+    for callback in ("example_called", "example_none_idiom"):
+        print(f"=== Profiling for {callback}\n")
+        cProfile.run(f"profile_func({callback}, {iterations})", f"log_{callback}.pstats")
 
 
 def main() -> None:
     import argparse
 
     parser = argparse.ArgumentParser(
-        description="Benchmark the late_bound_arg_defaults part of __experimental__.",
+        description="Benchmark the late_bound_arg_defaults feature.",
     )
     parser.add_argument("-b", "--benchmark", action="store_true")
     parser.add_argument("-p", "--profile", action="store_true")
@@ -131,13 +94,24 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    iterations = args.iterations
     if not (args.benchmark or args.profile):
         msg = "Pick an option to run this with, either -b or -p."
         raise RuntimeError(msg)
+
+    iterations = args.iterations
+
     if args.benchmark:
+        print("============ Timing ============")
         run_timer(iterations)
+        # TODO: Make late_bound_arg_defaults faster somehow, because 22x slower is terrible.
+        #
+        # iterations = 750,000
+        # ============ Timing ============
+        # With call:                2.295235194993438
+        # With None sentinel idiom: 0.10595109898713417
+
     if args.profile:
+        print("============ Profiling ============")
         run_profiler(iterations)
 
 

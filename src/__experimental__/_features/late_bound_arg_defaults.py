@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Callable, Dict, Generator, Iterable, List, Opt
 
 from __experimental__._utils.misc import copy_annotations
 from __experimental__._utils.peekable import Peekable
+from __experimental__._utils.token_helpers import offset_line_horizontal
 
 if TYPE_CHECKING:
     from typing_extensions import Buffer as ReadableBuffer, TypeGuard
@@ -27,7 +28,7 @@ else:
 __all__ = ("transform_tokens", "transform_source", "transform_ast", "parse")
 
 
-# === The parts that will actually do the work of implementing late binding argument defaults.
+# ======== The parts that will actually do the work of implementing late binding argument defaults.
 
 
 @final
@@ -52,7 +53,8 @@ def _evaluate_late_binding(orig_locals: Dict[str, object]) -> None:
 
     for arg_name, arg_val in orig_locals.items():
         if type(arg_val) is _defer:
-            # partial(is_not, ...) is another micro-optimization.
+            # Another micro-optimization.
+            # partial(is_not, ...) performs twice as fast as a predefined custom function/lambda.
             new_locals[arg_name] = arg_val(*takewhile(partial(is_not, arg_val), new_locals_values))
 
     # Update the locals of the last frame with these new evaluated defaults.
@@ -66,7 +68,7 @@ def _evaluate_late_binding(orig_locals: Dict[str, object]) -> None:
         del frame
 
 
-# === Token modification.
+# ======== Token modification.
 
 
 def transform_tokens(tokens: Iterable[tokenize.TokenInfo]) -> Generator[tokenize.TokenInfo, None, None]:
@@ -78,6 +80,7 @@ def transform_tokens(tokens: Iterable[tokenize.TokenInfo]) -> Generator[tokenize
             tok.exact_type == tokenize.EQUAL
             and peekable_tokens_iter.has_more()
             and (peek := peekable_tokens_iter.peek()).exact_type == tokenize.GREATER
+            and tok.end == peek.start  # "=>" should be connected with no space in between.
         ):
             yield tok
 
@@ -89,16 +92,7 @@ def transform_tokens(tokens: Iterable[tokenize.TokenInfo]) -> Generator[tokenize
             yield tokenize.TokenInfo(tokenize.NAME, "_DEFER_MARKER", new_start, new_end, tok.line)
 
             # Fix the positions of the rest of the tokens on the same line.
-            old_row = tok.start[0]
-
-            for ltr_tok in peekable_tokens_iter:
-                if old_row != int(ltr_tok.start[0]):
-                    yield ltr_tok
-                    break
-
-                new_start = (ltr_tok.start[0], ltr_tok.start[1] + 13)
-                new_end = (ltr_tok.end[0], ltr_tok.end[1] + 13)
-                yield ltr_tok._replace(start=new_start, end=new_end)
+            yield from offset_line_horizontal(peekable_tokens_iter, tok.start[0], 13)
 
         else:
             yield tok
@@ -116,7 +110,7 @@ def transform_source(source: Union[str, ReadableBuffer]) -> str:
     return tokenize.untokenize(tokens_gen).decode(encoding)
 
 
-# === AST modification.
+# ======== AST modification.
 
 
 class LateBoundDefaultTransformer(ast.NodeTransformer):

@@ -14,6 +14,8 @@ authors = [
 ]
 classifiers = [
     "Development Status :: 1 - Planning",
+    "Natural Language :: English",
+    "Operating System :: OS Independent",
     "Programming Language :: Python",
     "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
@@ -21,6 +23,9 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: Implementation :: CPython",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Utilities",
+    "Typing :: Typed",
 ]
 
 [project.urls]
@@ -32,6 +37,7 @@ Source = "https://github.com/Sachaa-Thanasius/experimental"
 packages = ["src/__experimental__"]
 
 [tool.hatch.build.targets.wheel.hooks.autorun]
+# Install the import hook to automatically register experimental's finder.
 dependencies = ["hatch-autorun"]
 code = """
 try:

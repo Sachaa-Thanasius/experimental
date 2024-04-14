@@ -1,4 +1,5 @@
-# This code is mostly modified from https://github.com/asottile/reorder-python-imports/blob/main/reorder_python_imports.py
+# The code up to and including get_imported_experimental_flags() is mostly
+# modified from https://github.com/asottile/reorder-python-imports/blob/main/reorder_python_imports.py
 # which is available under the MIT License below:
 #
 # Copyright (c) 2014 Anthony Sottile
@@ -23,7 +24,8 @@
 
 import enum
 import re
-from typing import Generator, Pattern, Set, Tuple
+import tokenize
+from typing import Generator, Iterable, Pattern, Set, Tuple
 
 __all__ = ("get_imported_experimental_flags",)
 
@@ -90,3 +92,22 @@ def get_imported_experimental_flags(source: str) -> Set[str]:
                     continue
                 potential_flags.add(name[0])
     return potential_flags
+
+
+def offset_token_horizontal(tok: tokenize.TokenInfo, offset: int) -> tokenize.TokenInfo:
+    start_row, start_col = tok.start
+    end_row, end_col = tok.end
+    return tok._replace(start=(start_row, start_col + offset), end=(end_row, end_col + offset))
+
+
+def offset_line_horizontal(
+    tokens: Iterable[tokenize.TokenInfo],
+    line: int,
+    offset: int,
+) -> Generator[tokenize.TokenInfo, None, None]:
+    for tok in tokens:
+        if line != tok.start[0]:
+            yield tok
+            break
+
+        yield offset_token_horizontal(tok, offset)

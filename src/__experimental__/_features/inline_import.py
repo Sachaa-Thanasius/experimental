@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Iterable, List, Optional, Tuple, Union
 
 from __experimental__._utils.misc import copy_annotations
 from __experimental__._utils.peekable import Peekable
+from __experimental__._utils.token_helpers import offset_line_horizontal, offset_token_horizontal
 
 if TYPE_CHECKING:
     from typing_extensions import Buffer as ReadableBuffer
@@ -16,7 +17,7 @@ else:
 __all__ = ("transform_tokens", "transform_source", "transform_ast", "parse")
 
 
-# === Token modification.
+# ======== Token modification.
 
 
 def transform_tokens(tokens: Iterable[tokenize.TokenInfo]) -> List[tokenize.TokenInfo]:
@@ -69,9 +70,7 @@ def transform_tokens(tokens: Iterable[tokenize.TokenInfo]) -> List[tokenize.Toke
             ]
 
             # Adjust the positions of the following tokens within the inline import expression.
-            for i, old_tok in enumerate(new_tokens[last_place + 2 :], start=last_place + 2):
-                (start_row, start_col), (end_row, end_col) = old_tok.start, old_tok.end
-                new_tokens[i] = old_tok._replace(start=(start_row, start_col + 18), end=(end_row, end_col + 18))
+            new_tokens[last_place + 2 :] = (offset_token_horizontal(tok, 18) for tok in new_tokens[last_place + 2 :])
 
             # Add a closing parenthesis.
             (end_row, end_col) = new_tokens[-1].end
@@ -80,21 +79,17 @@ def transform_tokens(tokens: Iterable[tokenize.TokenInfo]) -> List[tokenize.Toke
             new_tokens.append(end_paren_token)
 
             # Fix the positions of the rest of the tokens on the same line.
-            fixed_tokens: list[tokenize.TokenInfo] = []
+            fixed_line_tokens: list[tokenize.TokenInfo] = []
             after_tok: Optional[tokenize.TokenInfo] = None
 
-            old_row = end_paren_token.start[0]
+            curr_row = end_paren_token.start[0]
 
-            for ltr_tok in peekable_tokens_iter:
-                if old_row != int(ltr_tok.start[0]):
-                    after_tok = ltr_tok
-                    break
+            fixed_line_tokens.extend(offset_line_horizontal(peekable_tokens_iter, curr_row, 18))
+            if fixed_line_tokens[-1].start[0] != curr_row:
+                after_tok = fixed_line_tokens.pop()
 
-                new_start = (ltr_tok.start[0], ltr_tok.start[1] + 18)
-                new_end = (ltr_tok.end[0], ltr_tok.end[1] + 18)
-                fixed_tokens.append(ltr_tok._replace(start=new_start, end=new_end))
-
-            new_tokens.extend(transform_tokens(fixed_tokens))
+            # Check the rest of the line for inline import expressions.
+            new_tokens.extend(transform_tokens(fixed_line_tokens))
 
             if after_tok:
                 new_tokens.append(after_tok)
@@ -114,7 +109,7 @@ def transform_source(source: Union[str, ReadableBuffer]) -> str:
     return tokenize.untokenize(tokens_list).decode(encoding)
 
 
-# === AST modification.
+# ======== AST modification.
 
 
 class InlineImportTransformer(ast.NodeTransformer):
@@ -127,7 +122,7 @@ class InlineImportTransformer(ast.NodeTransformer):
             isinstance(node, ast.Attribute)  # pyright: ignore[reportUnnecessaryIsInstance]
             and isinstance(node.value, (ast.Attribute, ast.Name))
         ):
-            msg = "Only names and attributes can be within the inline import expression."
+            msg = "Only names and attribute access (dot operator) can be within the inline import expression."
             raise SyntaxError(msg)  # noqa: TRY004
 
         return cls._collapse_attributes(node.value) + f".{node.attr}"
@@ -139,7 +134,6 @@ class InlineImportTransformer(ast.NodeTransformer):
             and len(node.args) == 1
             and isinstance(node.args[0], (ast.Attribute, ast.Name))
         ):
-            import_arg = node.args[0]
             node.func = ast.Attribute(
                 value=ast.Call(
                     func=ast.Name(id="__import__", ctx=ast.Load()),
@@ -149,7 +143,7 @@ class InlineImportTransformer(ast.NodeTransformer):
                 attr="import_module",
                 ctx=ast.Load(),
             )
-            node.args[0] = ast.Constant(value=self._collapse_attributes(import_arg))
+            node.args[0] = ast.Constant(value=self._collapse_attributes(node.args[0]))
 
         return self.generic_visit(node)
 

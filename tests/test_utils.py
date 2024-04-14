@@ -1,7 +1,7 @@
 import typing
 
 import pytest
-from __experimental__._utils.token_helper import get_imported_experimental_flags
+from __experimental__._utils.token_helpers import get_imported_experimental_flags
 
 
 @pytest.mark.parametrize(

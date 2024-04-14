@@ -105,7 +105,8 @@ def main() -> None:
         print("============ Timing ============")
         run_timer(iterations)
 
-        # TODO: Make late_bound_arg_defaults faster somehow, because 20x slower is terrible.
+        # TODO: See if there's a way to make late_bound_arg_defaults faster somehow while using "pure" Python
+        # because 20x slower is terrible.
         #
         # Iterations = 1,000,000
         # ============ Timing ============

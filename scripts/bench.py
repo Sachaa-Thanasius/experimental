@@ -1,6 +1,6 @@
 """A small script for timing the late bound arg defaults against the normal sentinel idiom."""
 
-from typing import Callable, List, Optional, Tuple
+from collections.abc import Callable
 
 from __experimental__._features.late_bound_arg_defaults import _defer, _evaluate_late_binding
 
@@ -26,10 +26,10 @@ def example_called(
     /,
     ex: str = "hello",
     *,
-    c: List[object] = _defer(lambda a, b, ex: ["Preceding args", a, b, ex]),  # type: ignore # noqa: B008
+    c: list[object] = _defer(lambda a, b, ex: ["Preceding args", a, b, ex]),  # type: ignore # noqa: B008
     d: bool = False,
     e: int = _defer(lambda a, b, ex, c, d: len(c)),  # type: ignore
-) -> Tuple[List[object], int]:
+) -> tuple[list[object], int]:
     _evaluate_late_binding(locals())
     return c, e
 
@@ -40,10 +40,10 @@ def example_none_idiom(
     /,
     ex: str = "hello",
     *,
-    c: Optional[List[object]] = None,
+    c: list[object] | None = None,
     d: bool = False,
-    e: Optional[int] = None,
-) -> Tuple[List[object], int]:
+    e: int | None = None,
+) -> tuple[list[object], int]:
     if c is None:
         c = ["Preceding args", a, b, ex]
     if e is None:
@@ -107,6 +107,7 @@ def main() -> None:
 
         # TODO: See if there's a way to make late_bound_arg_defaults faster somehow while using "pure" Python
         # because 20x slower is terrible.
+        # e.g.
         #
         # Iterations = 1,000,000
         # ============ Timing ============

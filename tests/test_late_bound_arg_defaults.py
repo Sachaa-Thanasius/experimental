@@ -6,7 +6,7 @@ import importlib.util
 import pathlib
 import sys
 import types
-from typing import Any, Dict, List, Tuple
+from typing import Any
 
 from __experimental__._base import _ExperimentalLoader
 from __experimental__._features import late_bound_arg_defaults as late_bind
@@ -52,10 +52,10 @@ def test_late_binding_logic() -> None:
         /,
         ex: str = "hello",
         *,
-        c: List[object] = late_bind._defer(lambda a, b, ex: ["Preceding args", a, b, ex]),  # noqa: B008
+        c: list[object] = late_bind._defer(lambda a, b, ex: ["Preceding args", a, b, ex]),  # noqa: B008
         d: bool = False,
         e: int = late_bind._defer(lambda a, b, ex, c, d: len(c)),
-    ) -> Tuple[List[object], int]:
+    ) -> tuple[list[object], int]:
         late_bind._evaluate_late_binding(locals())
         return c, e
 
@@ -70,7 +70,7 @@ def test_transform_source() -> None:
 
 
 def test_transform_ast() -> None:
-    globals_: Dict[str, Any] = {}
+    globals_: dict[str, Any] = {}
 
     tree = late_bind.transform_ast(ast.parse(post_retokenize_source))
     code = compile(tree, "<string>", "exec")
@@ -85,7 +85,7 @@ def test_transform_ast() -> None:
 
 def test_transform_ast_with_docstring() -> None:
     original_source = f'"""Module level docstring"""\n{post_retokenize_source}'
-    globals_: Dict[str, Any] = {}
+    globals_: dict[str, Any] = {}
 
     tree = late_bind.transform_ast(ast.parse(original_source))
     code = compile(tree, "<string>", "exec")
@@ -101,7 +101,7 @@ def test_transform_ast_with_docstring() -> None:
 def test_transform_ast_with_future_import() -> None:
     original_source = f"from __future__ import annotations\n{post_retokenize_source}"
 
-    globals_: Dict[str, Any] = {}
+    globals_: dict[str, Any] = {}
 
     tree = late_bind.transform_ast(ast.parse(original_source))
     code = compile(tree, "<string>", "exec")
@@ -117,7 +117,7 @@ def test_transform_ast_with_future_import() -> None:
 def test_transform_ast_with_docstring_and_future_import() -> None:
     original_source = f'"""Module level docstring"""\nfrom __future__ import annotations\n{post_retokenize_source}'
 
-    globals_: Dict[str, Any] = {}
+    globals_: dict[str, Any] = {}
 
     tree = late_bind.transform_ast(ast.parse(original_source))
     code = compile(tree, "<string>", "exec")

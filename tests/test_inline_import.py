@@ -1,6 +1,6 @@
 import ipaddress
 import urllib.parse
-from typing import TYPE_CHECKING, Any, Dict
+from typing import TYPE_CHECKING, Any
 
 import pytest
 from __experimental__._features import inline_import
@@ -169,7 +169,7 @@ def test_kwargs() -> None:
     ],
 )
 def test_typehint_conversion(test_source: str, annotation_var: str) -> None:
-    globals_: Dict[str, Any] = {}
+    globals_: dict[str, Any] = {}
 
     tree = inline_import.parse(test_source)
     code = compile(tree, "<string>", "exec")

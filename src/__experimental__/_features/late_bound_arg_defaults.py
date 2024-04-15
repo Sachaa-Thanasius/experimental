@@ -4,24 +4,20 @@ import ast
 import ctypes
 import sys
 import tokenize
+from collections.abc import Callable, Generator, Iterable
 from functools import partial
 from io import BytesIO
 from itertools import takewhile
 from operator import is_not
-from typing import TYPE_CHECKING, Callable, Dict, Generator, Iterable, List, Optional, Tuple, Union, final
+from typing import TYPE_CHECKING, TypeGuard, final
 
 from __experimental__._utils.misc import copy_annotations
 from __experimental__._utils.peekable import Peekable
 from __experimental__._utils.token_helpers import offset_line_horizontal
 
 if TYPE_CHECKING:
-    from typing_extensions import Buffer as ReadableBuffer, TypeGuard
+    from typing_extensions import Buffer as ReadableBuffer
 else:
-    from __experimental__._utils.misc import PlaceholderMeta
-
-    class TypeGuard(metaclass=PlaceholderMeta):
-        pass
-
     ReadableBuffer = bytes
 
 
@@ -44,7 +40,7 @@ class _defer:
         return self.func(*args, **kwargs)
 
 
-def _evaluate_late_binding(orig_locals: Dict[str, object]) -> None:
+def _evaluate_late_binding(orig_locals: dict[str, object]) -> None:
     """Does the actual work of evaluating the late bindings and assigning them to the locals."""
 
     # Evaluate the late-bound function argument defaults (i.e. those with type `_defer`).
@@ -86,19 +82,19 @@ def transform_tokens(tokens: Iterable[tokenize.TokenInfo]) -> Generator[tokenize
 
             # Replace this next token with a marker.
             next(peekable_tokens_iter)
-            start_col, start_row = peek.start
-            new_start = (start_col, start_row + 1)
-            new_end = (start_col, start_row + 15)
+            start_row, start_col = peek.start
+            new_start = (start_row, start_col + 1)
+            new_end = (start_row, start_col + 15)
             yield tokenize.TokenInfo(tokenize.NAME, "_DEFER_MARKER", new_start, new_end, tok.line)
 
             # Fix the positions of the rest of the tokens on the same line.
-            yield from offset_line_horizontal(peekable_tokens_iter, tok.start[0], 13)
+            yield from offset_line_horizontal(peekable_tokens_iter, start_row, 13)
 
         else:
             yield tok
 
 
-def transform_source(source: Union[str, ReadableBuffer]) -> str:
+def transform_source(source: str | ReadableBuffer) -> str:
     """Replaces late binding tokens with valid Python, along with markers for the ast transformer."""
 
     if isinstance(source, str):
@@ -123,7 +119,7 @@ class LateBoundDefaultTransformer(ast.NodeTransformer):
         )
 
     @staticmethod
-    def _replace_marker_node(node: ast.Call, index: int, all_previous_args: List[ast.arg]) -> ast.Call:
+    def _replace_marker_node(node: ast.Call, index: int, all_previous_args: list[ast.arg]) -> ast.Call:
         lambda_arg_names = [arg.arg for arg in all_previous_args[:index]]
         new_lambda = ast.Lambda(
             args=ast.arguments(
@@ -137,7 +133,7 @@ class LateBoundDefaultTransformer(ast.NodeTransformer):
         )
         return ast.Call(func=ast.Name(id="@defer", ctx=ast.Load()), args=[new_lambda], keywords=[])
 
-    def _replace_late_bound_markers(self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef]) -> None:
+    def _replace_late_bound_markers(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
         # Replace the markers in the function defaults with actual defer objects.
         all_func_defaults = node.args.defaults + node.args.kw_defaults
         try:
@@ -170,7 +166,7 @@ class LateBoundDefaultTransformer(ast.NodeTransformer):
             actual_index = index + kw_default_offset
             node.args.kw_defaults[index] = self._replace_marker_node(marker, actual_index, all_args)
 
-    def _add_late_binding_evaluate_call(self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef]) -> None:
+    def _add_late_binding_evaluate_call(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
         # Put a call to evaluate the defer objects, the late bindings, as the first line of the function.
         evaluate_expr = ast.Expr(
             value=ast.Call(
@@ -180,15 +176,11 @@ class LateBoundDefaultTransformer(ast.NodeTransformer):
             )
         )
 
-        if (
-            node.body
-            and isinstance(node.body[0], ast.Expr)
-            and isinstance(node.body[0].value, ast.Constant)
-            and isinstance(node.body[0].value.value, str)
-        ):
-            node.body.insert(1, evaluate_expr)
-        else:
-            node.body.insert(0, evaluate_expr)
+        match node.body:
+            case [ast.Expr(value=ast.Constant(value=str()))]:
+                node.body.insert(1, evaluate_expr)
+            case _:
+                node.body.insert(0, evaluate_expr)
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> ast.AST:
         self._replace_late_bound_markers(node)
@@ -206,17 +198,13 @@ class LateBoundDefaultTransformer(ast.NodeTransformer):
         expect_docstring = True
         position = 0
         for sub_node in node.body:
-            if (
-                expect_docstring
-                and isinstance(sub_node, ast.Expr)
-                and isinstance(sub_node.value, ast.Constant)
-                and isinstance(sub_node.value.value, str)
-            ):
-                expect_docstring = False
-            elif isinstance(sub_node, ast.ImportFrom) and sub_node.module == "__future__" and sub_node.level == 0:
-                pass
-            else:
-                break
+            match sub_node:
+                case ast.Expr(value=ast.Constant(value=str())) if expect_docstring:
+                    expect_docstring = False
+                case ast.ImportFrom(module="__future__", level=0):
+                    pass
+                case _:
+                    break
 
             position += 1
 
@@ -234,12 +222,12 @@ def transform_ast(tree: ast.AST) -> ast.Module:
 # Some of the parameter annotations are too narrow or wide, but they should be "overriden" by this decorator.
 @copy_annotations(ast.parse)  # type: ignore
 def parse(
-    source: Union[str, ReadableBuffer],
+    source: str | ReadableBuffer,
     filename: str = "<unknown>",
     mode: str = "exec",
     *,
     type_comments: bool = False,
-    feature_version: Optional[Tuple[int, int]] = None,
+    feature_version: tuple[int, int] | None = None,
 ) -> ast.Module:
     return transform_ast(
         ast.parse(

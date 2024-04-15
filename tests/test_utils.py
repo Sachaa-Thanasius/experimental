@@ -1,5 +1,3 @@
-import typing
-
 import pytest
 from __experimental__._utils.token_helpers import get_imported_experimental_flags
 
@@ -66,6 +64,6 @@ from __experimental__._utils.token_helpers import get_imported_experimental_flag
         ),
     ],
 )
-def test_get_imported_experimental_flags(test_source: str, expected_result: typing.Set[str]) -> None:
+def test_get_imported_experimental_flags(test_source: str, expected_result: set[str]) -> None:
     result = get_imported_experimental_flags(test_source)
     assert result == expected_result, f"{result=}, {expected_result}"

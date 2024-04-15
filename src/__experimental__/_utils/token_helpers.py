@@ -25,7 +25,8 @@
 import enum
 import re
 import tokenize
-from typing import Generator, Iterable, Pattern, Set, Tuple
+from collections.abc import Generator, Iterable
+from re import Pattern
 
 __all__ = ("get_imported_experimental_flags",)
 
@@ -54,11 +55,11 @@ NAMES = rf"\((?:\s+|,|{NAME}|{ESCAPED_NL}|{COMMENT})*\)"
 STRING = rf"{PREFIX}(?:{DOUBLE_3}|{SINGLE_3}|{DOUBLE_1}|{SINGLE_1})"
 
 
-def _create_pattern(base: str, pats: Tuple[str, ...]) -> Pattern[str]:
+def _create_pattern(base: str, pats: tuple[str, ...]) -> Pattern[str]:
     return re.compile(rf'{base}(?:{"|".join(pats)})*({COMMENT})?(?:\n|$)')
 
 
-TOKENIZE: Tuple[Tuple[TokenType, Pattern[str]], ...] = (
+TOKENIZE: tuple[tuple[TokenType, Pattern[str]], ...] = (
     (TokenType.IMPORT, _create_pattern(IMPORT, (WS, NAME, OP, ESCAPED_NL, NAMES))),
     (TokenType.NEWLINE, _create_pattern(EMPTY, ())),
     (TokenType.STRING, _create_pattern(STRING, (WS, STRING, ESCAPED_NL))),
@@ -67,7 +68,7 @@ TOKENIZE: Tuple[Tuple[TokenType, Pattern[str]], ...] = (
 _FROM_EXPERIMENTAL = "from __experimental__ import "
 
 
-def _tokenize_pre_code(source: str) -> Generator[Tuple[TokenType, str], None, None]:
+def _tokenize_pre_code(source: str) -> Generator[tuple[TokenType, str], None, None]:
     pos = 0
     while True:
         for tp, reg in TOKENIZE:
@@ -79,7 +80,7 @@ def _tokenize_pre_code(source: str) -> Generator[Tuple[TokenType, str], None, No
             return
 
 
-def get_imported_experimental_flags(source: str) -> Set[str]:
+def get_imported_experimental_flags(source: str) -> set[str]:
     """Find all the imports from __experimental__ that were made at the top of a Python file."""
 
     # Attempts were made to switch over to a tokenize-based version, but it was 10x slower.

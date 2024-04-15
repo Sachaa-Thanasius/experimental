@@ -8,7 +8,8 @@
 # Copyright (C) 2023 Michael Hall <https://github.com/mikeshardmind>
 
 from collections import deque
-from typing import Generic, Iterable, TypeVar
+from collections.abc import Iterable
+from typing import Generic, TypeVar
 
 T = TypeVar("T")
 

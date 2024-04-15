@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "experimental"
 description = "A package with some experimental code transformations activated via '__future__'-like imports."
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 version = "2024.04.09"
 readme = "README.md"
 license = "MIT"
@@ -17,8 +17,6 @@ classifiers = [
     "Natural Language :: English",
     "Operating System :: OS Independent",
     "Programming Language :: Python",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
@@ -60,7 +58,7 @@ cov-report = ["- coverage combine", "coverage report"]
 cov = ["test-cov", "cov-report"]
 
 [[tool.hatch.envs.test.matrix]]
-python = ["3.8", "3.9", "3.10", "3.11", "3.12"]
+python = ["3.10", "3.11", "3.12"]
 
 [tool.pytest.ini_options]
 pythonpath = "src"
@@ -78,7 +76,7 @@ fail_under = 70
 [tool.ruff]
 include = ["src/__experimental__/*"]
 line-length = 120
-target-version = "py38"
+target-version = "py310"
 
 [tool.ruff.lint]
 select = [
@@ -169,7 +167,7 @@ keep-runtime-typing = true
 [tool.pyright]
 include = ["src/__experimental__"]
 ignore = ["tests"]
-pythonVersion = "3.8"
+pythonVersion = "3.10"
 typeCheckingMode = "strict"
 
 reportPrivateUsage = "none"

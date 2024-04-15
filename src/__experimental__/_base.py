@@ -10,9 +10,10 @@ import importlib.util
 import os
 import sys
 import tokenize
+from collections.abc import Callable, Iterable, Sequence
 from importlib._bootstrap import _call_with_frames_removed  # type: ignore # Has to come from importlib.
 from io import BytesIO
-from typing import TYPE_CHECKING, Callable, ClassVar, Dict, Iterable, Optional, Sequence, Set, Tuple, TypeVar, Union
+from typing import TYPE_CHECKING, ClassVar, TypeAlias, TypeVar
 
 from __experimental__._features import (
     inline_import as _inline_import,
@@ -25,7 +26,7 @@ if TYPE_CHECKING:
     import types
     from typing import Protocol, cast
 
-    from typing_extensions import Buffer as ReadableBuffer, ParamSpec, Self, TypeAlias
+    from typing_extensions import Buffer as ReadableBuffer, ParamSpec, Self
 
     T = TypeVar("T")
     P = ParamSpec("P")
@@ -39,14 +40,11 @@ else:
     class Self:
         pass
 
-    class TypeAlias:
-        pass
-
     ReadableBuffer = bytes
 
 
 # Copied from _typeshed - this and ReadableBuffer were marked as stable.
-StrPath: TypeAlias = "Union[str, os.PathLike[str]]"
+StrPath: TypeAlias = str | os.PathLike[str]
 
 
 class _Transformers:
@@ -54,10 +52,10 @@ class _Transformers:
 
     def __init__(
         self,
-        source_hook: Optional[Callable[[str], str]] = None,
-        token_hook: Optional[Callable[[Iterable[tokenize.TokenInfo]], Iterable[tokenize.TokenInfo]]] = None,
-        ast_hook: Optional[Callable[[ast.AST], ast.Module]] = None,
-        parse: Optional[Callable[[str], ast.Module]] = None,
+        source_hook: Callable[[str], str] | None = None,
+        token_hook: Callable[[Iterable[tokenize.TokenInfo]], Iterable[tokenize.TokenInfo]] | None = None,
+        ast_hook: Callable[[ast.AST], ast.Module] | None = None,
+        parse: Callable[[str], ast.Module] | None = None,
     ):
         self.source_hook = source_hook
         self.token_hook = token_hook
@@ -81,13 +79,13 @@ class _ExperimentalFeature:
     """
 
     __slots__ = ("name", "date_added", "transformers", "reference")
-    _registry: ClassVar[Dict[str, Self]] = {}
+    _registry: ClassVar[dict[str, Self]] = {}
 
-    def __init__(self, name: str, date_added: str, *, transformers: _Transformers, reference: Optional[str] = None):
+    def __init__(self, name: str, date_added: str, *, transformers: _Transformers, reference: str | None = None):
         self.name: str = name
         self.date_added: str = date_added
         self.transformers: _Transformers = transformers
-        self.reference: Optional[str] = reference
+        self.reference: str | None = reference
         self._registry[name] = self
 
     def __repr__(self) -> str:
@@ -136,9 +134,9 @@ class _ExperimentalFinder(importlib.abc.MetaPathFinder):
     def find_spec(
         self,
         fullname: str,
-        path: Optional[Sequence[str]],
-        target: "Optional[types.ModuleType]" = None,
-    ) -> Optional[importlib.machinery.ModuleSpec]:
+        path: Sequence[str] | None,
+        target: "types.ModuleType | None" = None,
+    ) -> importlib.machinery.ModuleSpec | None:
         # Ensure that this is a source file we can actually rewrite.
         # Method modified slightly from the pytest AssertionRewriteHook finding logic.
         spec = importlib.machinery.PathFinder.find_spec(fullname, path, target)
@@ -160,22 +158,22 @@ class _ExperimentalFinder(importlib.abc.MetaPathFinder):
 
 
 class _ExperimentalLoader(importlib.machinery.SourceFileLoader):
-    def create_module(self, spec: importlib.machinery.ModuleSpec) -> "Optional[types.ModuleType]":
+    def create_module(self, spec: importlib.machinery.ModuleSpec) -> "types.ModuleType | None":
         """Use default semantics for module creation, for now."""
 
     # Might need a typeshed question. SourceFileLoader generally only gets bytes as data.
     def source_to_code(  # type: ignore
         self,
         data: ReadableBuffer,
-        path: Union[ReadableBuffer, StrPath],
+        path: ReadableBuffer | StrPath,
         *,
         _optimize: int = -1,
     ) -> "types.CodeType":
         source = importlib.util.decode_source(data)
 
         # Check if the code imports anything from __experimental__ and collect imported features.
-        collected_flags: Set[str] = get_imported_experimental_flags(source)
-        features_to_activate: Tuple[_ExperimentalFeature, ...] = tuple(
+        collected_flags: set[str] = get_imported_experimental_flags(source)
+        features_to_activate: tuple[_ExperimentalFeature, ...] = tuple(
             _ExperimentalFeature._registry[flag]
             for flag in collected_flags.intersection(_ExperimentalFeature._registry.keys())
         )

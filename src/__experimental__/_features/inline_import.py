@@ -2,8 +2,9 @@
 
 import ast
 import tokenize
+from collections.abc import Iterable
 from io import BytesIO
-from typing import TYPE_CHECKING, Iterable, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING
 
 from __experimental__._utils.misc import copy_annotations
 from __experimental__._utils.peekable import Peekable
@@ -20,7 +21,7 @@ __all__ = ("transform_tokens", "transform_source", "transform_ast", "parse")
 # ======== Token modification.
 
 
-def transform_tokens(tokens: Iterable[tokenize.TokenInfo]) -> List[tokenize.TokenInfo]:
+def transform_tokens(tokens: Iterable[tokenize.TokenInfo]) -> list[tokenize.TokenInfo]:
     # TODO: Somehow make this a generator and/or make signature consistent with other transform_tokens predicates.
     new_tokens: list[tokenize.TokenInfo] = []
 
@@ -80,7 +81,7 @@ def transform_tokens(tokens: Iterable[tokenize.TokenInfo]) -> List[tokenize.Toke
 
             # Fix the positions of the rest of the tokens on the same line.
             fixed_line_tokens: list[tokenize.TokenInfo] = []
-            after_tok: Optional[tokenize.TokenInfo] = None
+            after_tok: tokenize.TokenInfo | None = None
 
             curr_row = end_paren_token.start[0]
 
@@ -99,7 +100,7 @@ def transform_tokens(tokens: Iterable[tokenize.TokenInfo]) -> List[tokenize.Toke
     return new_tokens
 
 
-def transform_source(source: Union[str, ReadableBuffer]) -> str:
+def transform_source(source: str | ReadableBuffer) -> str:
     if isinstance(source, str):
         source = source.encode("utf-8")
     stream = BytesIO(source)
@@ -114,36 +115,31 @@ def transform_source(source: Union[str, ReadableBuffer]) -> str:
 
 class InlineImportTransformer(ast.NodeTransformer):
     @classmethod
-    def _collapse_attributes(cls, node: Union[ast.Attribute, ast.Name]) -> str:
-        if isinstance(node, ast.Name):
-            return node.id
-
-        if not (
-            isinstance(node, ast.Attribute)  # pyright: ignore[reportUnnecessaryIsInstance]
-            and isinstance(node.value, (ast.Attribute, ast.Name))
-        ):
-            msg = "Only names and attribute access (dot operator) can be within the inline import expression."
-            raise SyntaxError(msg)  # noqa: TRY004
-
-        return cls._collapse_attributes(node.value) + f".{node.attr}"
+    def _collapse_attributes(cls, node: ast.Attribute | ast.Name) -> str:
+        match node:
+            case ast.Name():
+                return node.id
+            case ast.Attribute(value=(ast.Attribute() | ast.Name()) as value):
+                return cls._collapse_attributes(value) + f".{node.attr}"
+            case _:
+                msg = "Only names and attribute access (dot operator) can be within the inline import expression."
+                raise SyntaxError(msg)
 
     def visit_Call(self, node: ast.Call) -> ast.AST:
-        if (
-            isinstance(node.func, ast.Name)
-            and node.func.id == "_IMPORTLIB_MARKER"
-            and len(node.args) == 1
-            and isinstance(node.args[0], (ast.Attribute, ast.Name))
-        ):
-            node.func = ast.Attribute(
-                value=ast.Call(
-                    func=ast.Name(id="__import__", ctx=ast.Load()),
-                    args=[ast.Constant(value="importlib")],
-                    keywords=[],
-                ),
-                attr="import_module",
-                ctx=ast.Load(),
-            )
-            node.args[0] = ast.Constant(value=self._collapse_attributes(node.args[0]))
+        match node:
+            case ast.Call(func=ast.Name(id="_IMPORTLIB_MARKER"), args=[(ast.Attribute() | ast.Name()) as arg]):
+                node.func = ast.Attribute(
+                    value=ast.Call(
+                        func=ast.Name(id="__import__", ctx=ast.Load()),
+                        args=[ast.Constant(value="importlib")],
+                        keywords=[],
+                    ),
+                    attr="import_module",
+                    ctx=ast.Load(),
+                )
+                node.args[0] = ast.Constant(value=self._collapse_attributes(arg))
+            case _:
+                pass
 
         return self.generic_visit(node)
 
@@ -155,12 +151,12 @@ def transform_ast(tree: ast.AST) -> ast.Module:
 # Some of the parameter annotations are too narrow or wide, but they should be "overriden" by this decorator.
 @copy_annotations(ast.parse)  # type: ignore
 def parse(
-    source: Union[str, ReadableBuffer],
+    source: str | ReadableBuffer,
     filename: str = "<unknown>",
     mode: str = "exec",
     *,
     type_comments: bool = False,
-    feature_version: Optional[Tuple[int, int]] = None,
+    feature_version: tuple[int, int] | None = None,
 ) -> ast.Module:
     return transform_ast(
         ast.parse(

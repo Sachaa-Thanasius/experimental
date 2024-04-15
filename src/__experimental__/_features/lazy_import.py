@@ -5,7 +5,8 @@ import importlib.abc
 import importlib.machinery
 import importlib.util
 import sys
-from typing import TYPE_CHECKING, Optional, Sequence, Tuple, Union
+from collections.abc import Sequence
+from typing import TYPE_CHECKING
 
 from __experimental__._utils.misc import copy_annotations
 
@@ -29,8 +30,8 @@ class _LazyFinder(importlib.abc.MetaPathFinder):
     def find_spec(
         self,
         fullname: str,
-        path: Optional[Sequence[str]],
-        target: "Optional[types.ModuleType]" = None,
+        path: Sequence[str] | None,
+        target: "types.ModuleType | None" = None,
         /,
     ) -> importlib.machinery.ModuleSpec:
         for finder in sys.meta_path:
@@ -88,21 +89,13 @@ class LazyImportTransformer(ast.NodeTransformer):
         expect_docstring = True
         position = 0
         for sub_node in node.body:
-            if (
-                expect_docstring
-                and isinstance(sub_node, ast.Expr)
-                and isinstance(sub_node.value, ast.Constant)
-                and isinstance(sub_node.value.value, str)
-            ):
-                expect_docstring = False
-            elif (
-                isinstance(sub_node, ast.ImportFrom)
-                and sub_node.module in {"__future__", "__experimental__"}
-                and sub_node.level == 0
-            ):
-                pass
-            else:
-                break
+            match sub_node:
+                case ast.Expr(value=ast.Constant(value=str())) if expect_docstring:
+                    expect_docstring = False
+                case ast.ImportFrom(module="__future__" | "__experimental__", level=0):
+                    pass
+                case _:
+                    break
 
             position += 1
 
@@ -127,13 +120,19 @@ def transform_ast(tree: ast.AST) -> ast.Module:
 # Some of the parameter annotations are too narrow or wide, but they should be "overriden" by this decorator.
 @copy_annotations(ast.parse)  # type: ignore
 def parse(
-    source: Union[str, ReadableBuffer],
+    source: str | ReadableBuffer,
     filename: str = "<unknown>",
     mode: str = "exec",
     *,
     type_comments: bool = False,
-    feature_version: Optional[Tuple[int, int]] = None,
+    feature_version: tuple[int, int] | None = None,
 ) -> ast.Module:
     return transform_ast(
-        ast.parse(source, filename, mode, type_comments=type_comments, feature_version=feature_version),
+        ast.parse(
+            source,
+            filename,
+            mode,
+            type_comments=type_comments,
+            feature_version=feature_version,
+        ),
     )

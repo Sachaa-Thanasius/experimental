@@ -1,4 +1,4 @@
-"""A way to lazy-load blocks of regular import statements."""
+"""An implementation of lazy imports (PEP 690) with a context manager and module-wide in pure Python."""
 
 import ast
 import importlib.abc

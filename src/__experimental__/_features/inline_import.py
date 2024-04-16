@@ -1,4 +1,4 @@
-"""An implementation of inline import expressions in pure python."""
+"""An implementation of inline import expressions in pure Python."""
 
 import ast
 import tokenize

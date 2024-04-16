@@ -1,4 +1,4 @@
-"""An implementation of late-bound function defaults (PEP 671) in "pure" Python."""
+"""An implementation of late-bound function argument defaults (PEP 671) in "pure" Python."""
 
 import ast
 import ctypes

@@ -118,7 +118,7 @@ def transform_ast(tree: ast.AST) -> ast.Module:
 
 
 # Some of the parameter annotations are too narrow or wide, but they should be "overriden" by this decorator.
-@copy_annotations(ast.parse)  # type: ignore
+@copy_annotations(ast.parse)
 def parse(
     source: str | ReadableBuffer,
     filename: str = "<unknown>",

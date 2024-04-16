@@ -55,7 +55,7 @@ class _Transformers:
         source_hook: Callable[[str], str] | None = None,
         token_hook: Callable[[Iterable[tokenize.TokenInfo]], Iterable[tokenize.TokenInfo]] | None = None,
         ast_hook: Callable[[ast.AST], ast.Module] | None = None,
-        parse: Callable[[str], ast.Module] | None = None,
+        parse: Callable[..., ast.Module] | None = None,
     ):
         self.source_hook = source_hook
         self.token_hook = token_hook

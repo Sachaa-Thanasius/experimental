@@ -1,4 +1,4 @@
-# The code up to and including get_imported_experimental_flags() is mostly
+# The code up to but not including get_imported_experimental_flags() is mostly
 # modified from https://github.com/asottile/reorder-python-imports/blob/main/reorder_python_imports.py
 # which is available under the MIT License below:
 #
@@ -96,6 +96,8 @@ def get_imported_experimental_flags(source: str) -> set[str]:
 
 
 def offset_token_horizontal(tok: tokenize.TokenInfo, offset: int) -> tokenize.TokenInfo:
+    """Takes a token and returns a new token with the columns for start and end offset by a given amount."""
+
     start_row, start_col = tok.start
     end_row, end_col = tok.end
     return tok._replace(start=(start_row, start_col + offset), end=(end_row, end_col + offset))
@@ -106,6 +108,11 @@ def offset_line_horizontal(
     line: int,
     offset: int,
 ) -> Generator[tokenize.TokenInfo, None, None]:
+    """Takes a iterable of tokens and offsets the tokens horizontally if they are on the given line.
+
+    The last token returned might not be on the same line.
+    """
+
     for tok in tokens:
         if line != tok.start[0]:
             yield tok

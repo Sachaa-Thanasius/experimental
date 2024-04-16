@@ -56,11 +56,15 @@ _LAZY_FINDER = _LazyFinder()
 
 
 def lazy_install() -> None:
+    """Add a `_LazyFinder` singleton instance to `sys.meta_path`."""
+
     if _LAZY_FINDER not in sys.meta_path:
         sys.meta_path.insert(0, _LAZY_FINDER)
 
 
 def lazy_uninstall() -> None:
+    """Attempt to remove a `_LazyFinder` singleton instance from `sys.meta_path`."""
+
     try:
         sys.meta_path.remove(_LAZY_FINDER)
     except ValueError:
@@ -72,8 +76,8 @@ class lazy_module_import:
 
     Notes
     -----
-    This class is dead simple: It adds a special finder to sys.meta_path and then removes it. That finder
-    wraps the loaders of imported modules with importlib.util.LazyLoader.
+    This class is dead simple: It adds a special finder to `sys.meta_path` and then removes it. That finder
+    wraps the loaders of imported modules with `importlib.util.LazyLoader`.
     """
 
     def __enter__(self):
@@ -85,6 +89,11 @@ class lazy_module_import:
 
 
 class LazyImportTransformer(ast.NodeTransformer):
+    """An AST transformer that adds a call to `lazy_install` to the start of the module (after docstrings, __future__
+    imports, and __experimental__ imports) and a call to `lazy_uninstall` at the end of the module. This way, all imports within the
+    module will occur lazily.
+    """
+
     def visit_Module(self, node: ast.Module) -> ast.AST:
         expect_docstring = True
         position = 0
@@ -127,6 +136,10 @@ def parse(
     type_comments: bool = False,
     feature_version: tuple[int, int] | None = None,
 ) -> ast.Module:
+    """Convert source code to a valid AST with module-wide lazy imports enabled. Has the same signature as
+    `ast.parse`.
+    """
+
     return transform_ast(
         ast.parse(
             source,

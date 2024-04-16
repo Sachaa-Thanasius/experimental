@@ -23,7 +23,7 @@ __all__ = ("transform_tokens", "transform_source", "transform_ast", "parse")
 
 def transform_tokens(tokens: Iterable[tokenize.TokenInfo]) -> list[tokenize.TokenInfo]:
     """Find the inline import expressions in a list of tokens and replace the relevant tokens to wrap the imported
-    modules with '_IMPORTLIB_MARKER(...)'.
+    modules with `_IMPORTLIB_MARKER(...)`.
 
     Later, the AST transformer step will replace those with valid import expressions.
     """
@@ -107,7 +107,7 @@ def transform_tokens(tokens: Iterable[tokenize.TokenInfo]) -> list[tokenize.Toke
 
 
 def transform_source(source: str | ReadableBuffer) -> str:
-    """Replace and wrap inline import expressions in source code so that it has syntax, with explicit markers for
+    """Replace and wrap inline import expressions in source code so that it has valid syntax, with explicit markers for
     where to perform the imports.
     """
 
@@ -124,7 +124,7 @@ def transform_source(source: str | ReadableBuffer) -> str:
 
 
 class InlineImportTransformer(ast.NodeTransformer):
-    """An AST transformer that replaces '_IMPORTLIB_MARKER(...)' with '__import__("importlib").import_module(...)'."""
+    """An AST transformer that replaces `_IMPORTLIB_MARKER(...)` with `__import__("importlib").import_module(...)`."""
 
     @classmethod
     def _collapse_attributes(cls, node: ast.Attribute | ast.Name) -> str:
@@ -159,7 +159,7 @@ class InlineImportTransformer(ast.NodeTransformer):
 
 
 def transform_ast(tree: ast.AST) -> ast.Module:
-    """Walk through an AST and fix it to turn the _IMPORTLIB_MARKER(...) expressions into valid import statements."""
+    """Walk through an AST and fix it to turn the `_IMPORTLIB_MARKER(...)` expressions into valid import statements."""
 
     return ast.fix_missing_locations(InlineImportTransformer().visit(tree))
 
@@ -174,7 +174,7 @@ def parse(
     type_comments: bool = False,
     feature_version: tuple[int, int] | None = None,
 ) -> ast.Module:
-    """Convert source code with inline import expressions to an AST. Has the same signature as ast.parse."""
+    """Convert source code with inline import expressions to a valid AST. Has the same signature as `ast.parse`."""
 
     return transform_ast(
         ast.parse(

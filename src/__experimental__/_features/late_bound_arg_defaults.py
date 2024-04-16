@@ -68,7 +68,10 @@ def _evaluate_late_binding(orig_locals: dict[str, object]) -> None:
 
 
 def transform_tokens(tokens: Iterable[tokenize.TokenInfo]) -> Generator[tokenize.TokenInfo, None, None]:
-    """Replaces '=>' with '= _DEFER_MARKER' in the token stream to mark where 'defer' objects should go."""
+    """Replaces `=>` with `= _DEFER_MARKER` in the token stream.
+
+    Later, the AST transformer step will replace those markers with valid `_defer` objects.
+    """
 
     peekable_tokens_iter = Peekable(tokens)
     for tok in peekable_tokens_iter:
@@ -95,7 +98,7 @@ def transform_tokens(tokens: Iterable[tokenize.TokenInfo]) -> Generator[tokenize
 
 
 def transform_source(source: str | ReadableBuffer) -> str:
-    """Replaces late binding tokens with valid Python, along with markers for the ast transformer."""
+    """Replaces late binding tokens with valid syntax, with explicit markers for the AST transformer."""
 
     if isinstance(source, str):
         source = source.encode("utf-8")
@@ -110,6 +113,13 @@ def transform_source(source: str | ReadableBuffer) -> str:
 
 
 class LateBoundDefaultTransformer(ast.NodeTransformer):
+    """An AST transformer that replaces `_DEFER_MARKER(...)` with `_defer(lambda *args, **kwargs: ...)` approximately.
+
+    Note
+    ----
+    Those lambdas are tailor-constructed with actual individual parameters.
+    """
+
     @staticmethod
     def _is_marker_node(potential_node: object) -> TypeGuard[ast.Call]:
         return (
@@ -193,7 +203,7 @@ class LateBoundDefaultTransformer(ast.NodeTransformer):
         return self.generic_visit(node)
 
     def visit_Module(self, node: ast.Module) -> ast.AST:
-        """Import the defer type and evaluation functions so that the late binding-related symbols are valid."""
+        """Import the defer type and evaluation function so that the late binding-related symbols are valid."""
 
         expect_docstring = True
         position = 0
@@ -216,6 +226,10 @@ class LateBoundDefaultTransformer(ast.NodeTransformer):
 
 
 def transform_ast(tree: ast.AST) -> ast.Module:
+    """Walk through an AST and fix it to turn the `_DEFER_MARKER(...)` expressions into `_defer` instantiations, as
+    well as import `_defer` and `_evaluate_late_binding()` to place where appropriate.
+    """
+
     return ast.fix_missing_locations(LateBoundDefaultTransformer().visit(tree))
 
 
@@ -229,6 +243,10 @@ def parse(
     type_comments: bool = False,
     feature_version: tuple[int, int] | None = None,
 ) -> ast.Module:
+    """Convert source code with late-bound function argument defaults to a valid AST. Has the same signature as
+    `ast.parse`.
+    """
+
     return transform_ast(
         ast.parse(
             transform_source(source),

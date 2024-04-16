@@ -45,6 +45,11 @@ class _LazyFinder(importlib.abc.MetaPathFinder):
 
         if spec.loader is None:
             # Technically eager to say it's missing for sure here, but seems like the simplest path.
+            # References (CPython 3.11):
+            # - importlib._bootstrap_external.PathFinder._get_spec
+            # - importlib._bootstrap._load_unlocked
+            # - importlib._bootstrap._exec
+
             msg = "missing loader"
             raise ImportError(msg, name=spec.name)
 
@@ -76,8 +81,8 @@ class lazy_module_import:
 
     Notes
     -----
-    This class is dead simple: It adds a special finder to `sys.meta_path` and then removes it. That finder
-    wraps the loaders of imported modules with `importlib.util.LazyLoader`.
+    This class is dead simple: It adds a special finder to `sys.meta_path` and then removes it. That finder wraps the
+    loaders of imported modules with `importlib.util.LazyLoader`.
     """
 
     def __enter__(self):
@@ -90,8 +95,8 @@ class lazy_module_import:
 
 class LazyImportTransformer(ast.NodeTransformer):
     """An AST transformer that adds a call to `lazy_install` to the start of the module (after docstrings, __future__
-    imports, and __experimental__ imports) and a call to `lazy_uninstall` at the end of the module. This way, all imports within the
-    module will occur lazily.
+    imports, and __experimental__ imports) and a call to `lazy_uninstall` at the end of the module. This way, all
+    imports within the module will occur lazily.
     """
 
     def visit_Module(self, node: ast.Module) -> ast.AST:

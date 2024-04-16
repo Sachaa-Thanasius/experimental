@@ -15,6 +15,6 @@ def copy_annotations(original_func: Callable[_P, _T]) -> Callable[[Callable[...,
     """
 
     def inner(new_func: Callable[..., Any]) -> Callable[_P, _T]:
-        return functools.update_wrapper(new_func, original_func, ("__doc__", "__annotations__"))  # type: ignore
+        return functools.update_wrapper(new_func, original_func, ("__annotations__"))  # type: ignore
 
     return inner

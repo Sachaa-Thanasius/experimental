@@ -115,8 +115,8 @@ def transform_source(source: str | ReadableBuffer) -> str:
 class LateBoundDefaultTransformer(ast.NodeTransformer):
     """An AST transformer that replaces `_DEFER_MARKER(...)` with `_defer(lambda *args, **kwargs: ...)` approximately.
 
-    Note
-    ----
+    Notes
+    -----
     Those lambdas are tailor-constructed with actual individual parameters.
     """
 
@@ -244,7 +244,7 @@ def parse(
     feature_version: tuple[int, int] | None = None,
 ) -> ast.Module:
     """Convert source code with late-bound function argument defaults to a valid AST. Has the same signature as
-    `ast.parse`.
+    `ast.parse`: see that for more details about the parameters.
     """
 
     return transform_ast(

@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 name = "experimental"
 description = "A package with some experimental code transformations activated via '__future__'-like imports."
 requires-python = ">=3.10"
-version = "2024.04.09"
+version = "2024.04.16"
 readme = "README.md"
 license = "MIT"
 authors = [

@@ -10,7 +10,7 @@ This is a personal `__future__`-like collection of features that will only be ac
 - Inline import expressions
     - Based on [import-expression](https://github.com/ioistired/import-expression-parser)
 
-They should all work if imported together in a file.
+They shouldn't be mutually exclusive syntax-wise.
 
 
 ## Installation
@@ -46,6 +46,19 @@ from __experimental__ import lazy_import
 # i.e. delaying module load until accessing an attribute from the module.
 ...
 ```
+
+
+## Caveats
+This package uses a `.pth` file to register an import hook on interpreter startup. It hooks into the Python import system to add a custom [`MetaPathFinder`](https://docs.python.org/3/library/importlib.html#importlib.abc.MetaPathFinder) to [`sys.meta_path`](https://docs.python.org/3/library/sys.html#sys.meta_path). That should work fine if you're using a regular setup with site packages, where that `.pth` file should end up.
+
+However, if your environment is atypical, you might need to manually register that finder to have your code be processed by this package. Do so in a file away from the rest of your code. For example:
+
+```py
+import __experimental__
+__experimental__.install()
+import your_actual_module
+```
+
 
 ## Documentation
 See the docstrings and comments in the code. They're currently a little bare, but they will improve over time.

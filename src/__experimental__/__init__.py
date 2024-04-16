@@ -17,8 +17,8 @@ __all__ = (
     "all_feature_names",
     "inline_import",
     "late_bound_arg_defaults",
-    "lazy_module_import",
     "lazy_import",
+    "lazy_module_import",
     "install",
     "uninstall",
 )

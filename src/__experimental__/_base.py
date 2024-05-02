@@ -1,6 +1,8 @@
 """The main residence of the feature objects and overarching import logic.
 
 TODO: Consider making the features even more plugin-like.
+TODO: Figure out how to do one pass instead of multiple for the token and AST transformations.
+    See pyupgrade for inspiration.
 """
 
 import ast
@@ -158,7 +160,6 @@ class _ExperimentalLoader(importlib.machinery.SourceFileLoader):
         # Apply relevant token transformations.
         tokens = tokenize.tokenize(BytesIO(data).readline)
 
-        # TODO: Figure out how to do one pass instead of multiple. See pyupgrade for inspiration.
         for feature in features_to_activate:
             if feature.transformers.token_hook:
                 tokens = feature.transformers.token_hook(tokens)
@@ -177,7 +178,6 @@ class _ExperimentalLoader(importlib.machinery.SourceFileLoader):
             flags=ast.PyCF_ONLY_AST,
         )
 
-        # TODO: Figure out how to do one pass instead of multiple. See pyupgrade for inspiration.
         for feature in features_to_activate:
             if feature.transformers.ast_hook:
                 tree = feature.transformers.ast_hook(tree)

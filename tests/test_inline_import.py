@@ -19,7 +19,7 @@ from __experimental__._features import inline_import
         ("urllib.parse!.quote('?')", "_IMPORTLIB_MARKER(urllib.parse).quote('?')"),
     ],
 )
-def test_transform_source(test_source: str, expected_result: str) -> None:
+def test_transform_source(test_source: str, expected_result: str):
     retokenized_source = inline_import.transform_source(test_source)
     assert retokenized_source == expected_result
 
@@ -32,7 +32,7 @@ def test_transform_source(test_source: str, expected_result: str) -> None:
         ("urllib.parse!.quote('?')", urllib.parse.quote("?")),
     ],
 )
-def test_parse(test_source: str, expected_result: Any) -> None:
+def test_parse(test_source: str, expected_result: Any):
     tree = inline_import.parse(test_source, mode="eval")
     code = compile(tree, "<string>", "eval")
     result = eval(code)
@@ -51,7 +51,7 @@ def test_parse(test_source: str, expected_result: Any) -> None:
         ("f'{value = !r:20}'", "value = 'Here I am'         "),
     ],
 )
-def test_regular_fstring(test_fstring: str, expected_result: Any) -> None:
+def test_regular_fstring(test_fstring: str, expected_result: Any):
     globals_ = {"value": "Here I am"}
 
     tree = inline_import.parse(test_fstring, mode="eval")
@@ -80,24 +80,24 @@ def test_regular_fstring(test_fstring: str, expected_result: Any) -> None:
         "ab.b!c",
     ],
 )
-def test_invalid_attribute_syntax(invalid_expr: str) -> None:
+def test_invalid_attribute_syntax(invalid_expr: str):
     with pytest.raises(SyntaxError):
         _ = inline_import.parse(invalid_expr)
 
 
-def test_import_op_as_attr_name() -> None:
+def test_import_op_as_attr_name():
     with pytest.raises(SyntaxError):
         _ = inline_import.parse("a.!.b")
 
 
 @pytest.mark.parametrize("test_source", ["del a!.b", "a!.b = 1", "del a.b.c!.d", "a.b.c!.d = 1"])
-def test_del_store_import(test_source: str) -> None:
+def test_del_store_import(test_source: str):
     tree = inline_import.parse(test_source)
     _ = compile(tree, "<string>", "exec")
 
 
 @pytest.mark.parametrize("test_source", ["del a!", "a! = 1", "del a.b!", "a.b! = 1"])
-def test_invalid_del_store_import(test_source: str) -> None:
+def test_invalid_del_store_import(test_source: str):
     # TODO: Change test so it doesn't hide why test_del_store_import might fail.
 
     with pytest.raises(
@@ -109,7 +109,7 @@ def test_invalid_del_store_import(test_source: str) -> None:
         _ = inline_import.parse(test_source)
 
 
-def test_lone_import_op() -> None:
+def test_lone_import_op():
     with pytest.raises(SyntaxError):
         _ = inline_import.parse("!")
 
@@ -126,7 +126,7 @@ def test_lone_import_op() -> None:
         "class Y(Z! = 1): pass",
     ],
 )
-def test_invalid_argument_syntax(invalid_source: str) -> None:
+def test_invalid_argument_syntax(invalid_source: str):
     with pytest.raises(SyntaxError):
         _ = inline_import.parse(invalid_source)
 
@@ -145,12 +145,12 @@ def test_invalid_argument_syntax(invalid_source: str) -> None:
         "class Y(Z! = 1): pass",
     ],
 )
-def test_invalid_def_syntax(invalid_source: str) -> None:
+def test_invalid_def_syntax(invalid_source: str):
     with pytest.raises(SyntaxError):
         _ = inline_import.parse(invalid_source, "<string>")
 
 
-def test_kwargs() -> None:
+def test_kwargs():
     import collections
 
     tree = inline_import.parse("dict(x=collections!)", mode="eval")
@@ -168,7 +168,7 @@ def test_kwargs() -> None:
         ("def test_func(x: typing!.Any = 1): pass", "x"),
     ],
 )
-def test_typehint_conversion(test_source: str, annotation_var: str) -> None:
+def test_typehint_conversion(test_source: str, annotation_var: str):
     globals_: dict[str, Any] = {}
 
     tree = inline_import.parse(test_source)
@@ -192,12 +192,12 @@ def test_typehint_conversion(test_source: str, annotation_var: str) -> None:
         "from w.x import y as z, a as b!",
     ],
 )
-def test_import_statement(invalid_source: str) -> None:
+def test_import_statement(invalid_source: str):
     with pytest.raises(SyntaxError):
         _ = inline_import.parse(invalid_source, mode="exec")
 
 
-def test_importer_name_not_mangled() -> None:
+def test_importer_name_not_mangled():
     # If import_expression.constants.IMPORTER.startswith('__'), this will fail.
     _ = inline_import.parse("class Foo: x = io!")
 

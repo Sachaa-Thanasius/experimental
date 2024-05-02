@@ -64,12 +64,13 @@ python = ["3.10", "3.11", "3.12"]
 pythonpath = "src"
 addopts = ["--import-mode=importlib"]
 
+[tool.coverage.report]
+# It's a work in progress.
+fail_under = 70
+
 [tool.coverage.run]
 plugins = ["covdefaults"]
 omit = ["tests/sample_late_bound_arg.py"]
-
-[tool.coverage.report]
-fail_under = 70
 
 # ======== Linting-related config.
 
@@ -141,7 +142,7 @@ unfixable = [
 [tool.ruff.lint.extend-per-file-ignores]
 "tests/*" = [
     "T201",    # Printing is fine.
-    "ANN",     # Don't need many type annotations.
+    "ANN",     # Don't need many type annotations, especially return ones.
     "PLR0913", # Too many parameters.
     "PLR2004", # Magic value comparison.
     "F841",    # Unused variable.
@@ -166,7 +167,6 @@ keep-runtime-typing = true
 
 [tool.pyright]
 include = ["src/__experimental__"]
-ignore = ["tests"]
 pythonVersion = "3.10"
 typeCheckingMode = "strict"
 

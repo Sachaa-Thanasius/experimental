@@ -33,18 +33,18 @@ def test_finder_only_tries_removing_self():
 
 def test_nonexistent_import():
     with pytest.raises(ModuleNotFoundError):
-        import aaaaa
+        import aaaaaaaaaaaaa  # type: ignore # Unused and also doesn't exist.
 
-    with pytest.raises(ModuleNotFoundError):  # noqa: SIM117
+    with pytest.raises(ModuleNotFoundError):  # noqa: SIM117 # Better visual if nested.
         with lazy_import.lazy_module_import():
-            import aaaaa  # noqa: F811
+            import aaaaaaaaaaaaa  # type: ignore # noqa: F811 # Doesn't exist, also redefines name.
 
     # Things should go back to normal.
     with pytest.raises(ModuleNotFoundError):
-        import aaaaa  # noqa: F811
+        import aaaaaaaaaaaaa  # type: ignore # noqa: F811 # Doesn't exist, also redefines name.
 
 
-def test_finder(tmp_path: pathlib.Path) -> None:
+def test_finder(tmp_path: pathlib.Path):
     sample_text = """\
 from __future__ import annotations
 
@@ -65,10 +65,12 @@ first_finder = sys.meta_path[0]
     module_name = "sample"
     path = tmp_file.resolve()
 
-    spec = importlib.util.spec_from_file_location(module_name, path)
-    spec.loader = _ExperimentalLoader(module_name, str(path))
+    spec = importlib.util.spec_from_file_location(module_name, path, loader=_ExperimentalLoader(module_name, str(path)))
+
+    assert spec
+    assert spec.loader
+
     module = importlib.util.module_from_spec(spec)
-    sys.modules[module_name] = module
     spec.loader.exec_module(module)
 
     assert isinstance(module.first_finder, lazy_import._LazyFinder)

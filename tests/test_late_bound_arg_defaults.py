@@ -4,7 +4,6 @@ import ast
 import importlib
 import importlib.util
 import pathlib
-import sys
 import types
 from typing import Any
 
@@ -45,16 +44,16 @@ def test_func(
 """
 
 
-def test_late_binding_logic() -> None:
+def test_late_binding_logic():
     def late_binding_logic_example(
         a: int,
         b: float = 1.0,
         /,
         ex: str = "hello",
         *,
-        c: list[object] = late_bind._defer(lambda a, b, ex: ["Preceding args", a, b, ex]),  # noqa: B008
+        c: list[object] = late_bind._defer(lambda a, b, ex: ["Preceding args", a, b, ex]),  # type: ignore # noqa: B008
         d: bool = False,
-        e: int = late_bind._defer(lambda a, b, ex, c, d: len(c)),
+        e: int = late_bind._defer(lambda a, b, ex, c, d: len(c)),  # type: ignore
     ) -> tuple[list[object], int]:
         late_bind._evaluate_late_binding(locals())
         return c, e
@@ -64,12 +63,12 @@ def test_late_binding_logic() -> None:
     assert e == 4
 
 
-def test_transform_source() -> None:
+def test_transform_source():
     retokenized_source = late_bind.transform_source(original_source)
     assert retokenized_source == post_retokenize_source
 
 
-def test_transform_ast() -> None:
+def test_transform_ast():
     globals_: dict[str, Any] = {}
 
     tree = late_bind.transform_ast(ast.parse(post_retokenize_source))
@@ -83,7 +82,7 @@ def test_transform_ast() -> None:
     assert isinstance(test_func.__defaults__[2], late_bind._defer)
 
 
-def test_transform_ast_with_docstring() -> None:
+def test_transform_ast_with_docstring():
     original_source = f'"""Module level docstring"""\n{post_retokenize_source}'
     globals_: dict[str, Any] = {}
 
@@ -98,7 +97,7 @@ def test_transform_ast_with_docstring() -> None:
     assert isinstance(test_func, types.FunctionType)
 
 
-def test_transform_ast_with_future_import() -> None:
+def test_transform_ast_with_future_import():
     original_source = f"from __future__ import annotations\n{post_retokenize_source}"
 
     globals_: dict[str, Any] = {}
@@ -114,7 +113,7 @@ def test_transform_ast_with_future_import() -> None:
     assert isinstance(test_func, types.FunctionType)
 
 
-def test_transform_ast_with_docstring_and_future_import() -> None:
+def test_transform_ast_with_docstring_and_future_import():
     original_source = f'"""Module level docstring"""\nfrom __future__ import annotations\n{post_retokenize_source}'
 
     globals_: dict[str, Any] = {}
@@ -132,7 +131,7 @@ def test_transform_ast_with_docstring_and_future_import() -> None:
     assert isinstance(test_func, types.FunctionType)
 
 
-def test_loader(tmp_path: pathlib.Path) -> None:
+def test_loader(tmp_path: pathlib.Path):
     sample_text = """\
 from typing import Dict, List
 
@@ -149,6 +148,8 @@ def example_func(
 ) -> str:
     return z, a, b, c, d
 """
+
+    # Boilerplate to dynamically create and load this module.
     tmp_init = tmp_path / "__init__.py"
     tmp_init.touch()
     tmp_file = tmp_path / "sample.py"
@@ -158,8 +159,11 @@ def example_func(
     path = tmp_file.resolve()
 
     spec = importlib.util.spec_from_file_location(module_name, path, loader=_ExperimentalLoader(module_name, str(path)))
+
+    assert spec
+    assert spec.loader
+
     module = importlib.util.module_from_spec(spec)
-    sys.modules[module_name] = module
     spec.loader.exec_module(module)
 
     example_func = module.example_func

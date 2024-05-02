@@ -10,7 +10,7 @@ import importlib.util
 import os
 import sys
 import tokenize
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Iterable
 from importlib._bootstrap import _call_with_frames_removed  # type: ignore # Has to come from importlib.
 from io import BytesIO
 from typing import TYPE_CHECKING, ClassVar, TypeAlias, TypeVar
@@ -130,33 +130,6 @@ lazy_import = _ExperimentalFeature(
 )
 
 
-class _ExperimentalFinder(importlib.abc.MetaPathFinder):
-    def find_spec(
-        self,
-        fullname: str,
-        path: Sequence[str] | None,
-        target: "types.ModuleType | None" = None,
-    ) -> importlib.machinery.ModuleSpec | None:
-        # Ensure that this is a source file we can actually rewrite.
-        # Method modified slightly from the pytest AssertionRewriteHook finding logic.
-        spec = importlib.machinery.PathFinder.find_spec(fullname, path, target)
-
-        if (
-            spec is None
-            or spec.origin is None
-            or not isinstance(spec.loader, importlib.machinery.SourceFileLoader)
-            or not os.path.exists(spec.origin)  # noqa: PTH110
-        ):
-            return None
-
-        return importlib.util.spec_from_file_location(
-            fullname,
-            spec.origin,
-            loader=_ExperimentalLoader(fullname, spec.origin),
-            submodule_search_locations=spec.submodule_search_locations,
-        )
-
-
 class _ExperimentalLoader(importlib.machinery.SourceFileLoader):
     def create_module(self, spec: importlib.machinery.ModuleSpec) -> "types.ModuleType | None":
         """Use default semantics for module creation, for now."""
@@ -185,6 +158,7 @@ class _ExperimentalLoader(importlib.machinery.SourceFileLoader):
         # Apply relevant token transformations.
         tokens = tokenize.tokenize(BytesIO(data).readline)
 
+        # TODO: Figure out how to do one pass instead of multiple. See pyupgrade for inspiration.
         for feature in features_to_activate:
             if feature.transformers.token_hook:
                 tokens = feature.transformers.token_hook(tokens)
@@ -203,6 +177,7 @@ class _ExperimentalLoader(importlib.machinery.SourceFileLoader):
             flags=ast.PyCF_ONLY_AST,
         )
 
+        # TODO: Figure out how to do one pass instead of multiple. See pyupgrade for inspiration.
         for feature in features_to_activate:
             if feature.transformers.ast_hook:
                 tree = feature.transformers.ast_hook(tree)
@@ -211,16 +186,26 @@ class _ExperimentalLoader(importlib.machinery.SourceFileLoader):
         return _call_with_frames_removed(compile, tree, path, "exec", dont_inherit=True, optimize=_optimize)
 
 
-_EXPERIMENTAL_FINDER = _ExperimentalFinder()
+# Almost the same as the results of importlib._bootstrap_external._get_supported_file_loaders(),
+# except this gives our custom loader for source files.
+_MODIFIED_SUPPORTED_FILE_LOADERS = [
+    (importlib.machinery.ExtensionFileLoader, importlib.machinery.EXTENSION_SUFFIXES),
+    (_ExperimentalLoader, importlib.machinery.SOURCE_SUFFIXES),
+    (importlib.machinery.SourcelessFileLoader, importlib.machinery.BYTECODE_SUFFIXES),
+]
 
 
 def install() -> None:
-    if _EXPERIMENTAL_FINDER not in sys.meta_path:
-        sys.meta_path.insert(0, _EXPERIMENTAL_FINDER)
+    for i, hook in enumerate(sys.path_hooks):
+        if "FileFinder.path_hook" in hook.__qualname__:
+            new_hook = importlib.machinery.FileFinder.path_hook(*_MODIFIED_SUPPORTED_FILE_LOADERS)
+            new_hook._original_path_hook_for_FileFinder = hook  # type: ignore # Runtime attribute assignment.
+            sys.path_hooks[i] = new_hook
+            break
 
 
 def uninstall() -> None:
-    try:
-        sys.meta_path.remove(_EXPERIMENTAL_FINDER)
-    except ValueError:
-        pass
+    for i, hook in enumerate(sys.path_hooks):
+        if "FileFinder.path_hook" in hook.__qualname__ and hasattr(hook, "_original_path_hook_for_FileFinder"):
+            sys.path_hooks[i] = hook._original_path_hook_for_FileFinder  # type: ignore # Runtime attribute access.
+            break

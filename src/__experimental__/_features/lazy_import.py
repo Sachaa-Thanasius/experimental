@@ -5,14 +5,13 @@ import importlib.abc
 import importlib.machinery
 import importlib.util
 import sys
+import types
 from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
 from __experimental__._utils.misc import copy_annotations
 
 if TYPE_CHECKING:
-    import types
-
     from typing_extensions import Buffer as ReadableBuffer
 else:
     ReadableBuffer = bytes
@@ -31,7 +30,7 @@ class _LazyFinder(importlib.abc.MetaPathFinder):
         self,
         fullname: str,
         path: Sequence[str] | None,
-        target: "types.ModuleType | None" = None,
+        target: types.ModuleType | None = None,
         /,
     ) -> importlib.machinery.ModuleSpec:
         for finder in sys.meta_path:

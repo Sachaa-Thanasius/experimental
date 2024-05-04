@@ -13,6 +13,7 @@ import importlib.util
 import os
 import sys
 import tokenize
+import types
 from collections.abc import Callable, Iterable
 from importlib._bootstrap import _call_with_frames_removed  # type: ignore # Has to come from importlib.
 from io import BytesIO
@@ -27,7 +28,6 @@ from __experimental__._features import (
 from __experimental__._utils.token_helpers import get_imported_experimental_flags
 
 if TYPE_CHECKING:
-    import types
     from typing import Protocol, cast
 
     from typing_extensions import Buffer as ReadableBuffer, ParamSpec, Self
@@ -147,7 +147,7 @@ elide_cast = _ExperimentalFeature(
 
 
 class _ExperimentalLoader(importlib.machinery.SourceFileLoader):
-    def create_module(self, spec: importlib.machinery.ModuleSpec) -> "types.ModuleType | None":
+    def create_module(self, spec: importlib.machinery.ModuleSpec) -> types.ModuleType | None:
         """Use default semantics for module creation, for now."""
 
     # Might need a typeshed question. SourceFileLoader generally only gets bytes as data.
@@ -157,7 +157,7 @@ class _ExperimentalLoader(importlib.machinery.SourceFileLoader):
         path: ReadableBuffer | StrPath,
         *,
         _optimize: int = -1,
-    ) -> "types.CodeType":
+    ) -> types.CodeType:
         source = importlib.util.decode_source(data)
 
         # Check if the code imports anything from __experimental__ and collect imported features.

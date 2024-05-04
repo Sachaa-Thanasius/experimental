@@ -53,7 +53,7 @@ class CastElisionTransformer(ast.NodeTransformer):
 
     def visit_Import(self, node: ast.Import) -> ast.AST:
         self.scopes.update({(a.asname or a.name): a.name for a in node.names if a.name in self.typing_imports})
-        return node
+        return self.generic_visit(node)
 
     def visit_ImportFrom(self, node: ast.ImportFrom) -> ast.AST:
         source = node.module
@@ -61,24 +61,26 @@ class CastElisionTransformer(ast.NodeTransformer):
         if node.level == 0 and (source in self.typing_imports):
             self.scopes.update({a.asname or a.name: f"{source}.{a.name}" for a in node.names if a.name == "cast"})
 
-        return node
+        return self.generic_visit(node)
 
     def visit_Call(self, node: ast.Call) -> ast.AST:
         match node:
             case ast.Call(func=ast.Name(id=name), args=[_, new_node]) if imported_name := self.scopes.get(name):
                 self.used_at.append((imported_name, name, node.lineno))
-                return new_node
+                mod_node = new_node
             case ast.Call(
                 func=ast.Attribute(value=ast.Name(id=mod_name), attr="cast"), args=[_, new_node]
             ) if imported_name := self.scopes.get(mod_name):
                 self.used_at.append((f"{imported_name}.cast", f"{mod_name}.cast", node.lineno))
-                return new_node
+                mod_node = new_node
             case _:
-                return node
+                mod_node = node
+
+        return self.generic_visit(mod_node)
 
 
 def transform_ast(tree: ast.AST) -> ast.Module:
-    """Walk through an AST and replace calls to `typing.cast` or `typing_extensions.cast` with just the original value."""
+    """Walk through an AST and replace calls to `typing.cast` or `typing_extensions.cast` with the original value."""
 
     return ast.fix_missing_locations(CastElisionTransformer().visit(tree))
 

@@ -1,4 +1,5 @@
 from __experimental__._base import (
+    elide_cast,
     inline_import,
     install_experimental_import_hook,
     late_bound_arg_defaults,
@@ -8,6 +9,7 @@ from __experimental__._base import (
 from __experimental__._features.lazy_import import lazy_module_import
 
 all_feature_names = (
+    "elide_cast",
     "inline_import",
     "late_bound_arg_defaults",
     "lazy_import",
@@ -15,6 +17,7 @@ all_feature_names = (
 
 __all__ = (
     "all_feature_names",
+    "elide_cast",
     "inline_import",
     "late_bound_arg_defaults",
     "lazy_import",

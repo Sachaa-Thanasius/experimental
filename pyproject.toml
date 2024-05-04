@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "experimental"
-description = "Code transformations activated via `from __experimental__ import ...`."
+description = "Code transformations activated via `from __experimental__` imports."
 requires-python = ">=3.10"
 version = "2024.05.03"
 readme = "README.md"
@@ -13,7 +13,7 @@ authors = [
     { name = "Sachaa-Thanasius", email = "111999343+Sachaa-Thanasius@users.noreply.github.com" },
 ]
 classifiers = [
-    "Development Status :: 1 - Planning",
+    "Development Status :: 4 - Beta",
     "Natural Language :: English",
     "Operating System :: OS Independent",
     "Programming Language :: Python",

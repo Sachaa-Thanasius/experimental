@@ -3,10 +3,11 @@
 TODO: Consider making the features even more plugin-like.
 TODO: Figure out how to do one pass instead of multiple for the token and AST transformations.
     See pyupgrade for inspiration.
+TODO: Switch to working on a list of tokens instead of a generator. That'll remove some complexity and allow bigger
+    transformations.
 """
 
 import ast
-import importlib.abc
 import importlib.machinery
 import importlib.util
 import os
@@ -18,6 +19,7 @@ from io import BytesIO
 from typing import TYPE_CHECKING, ClassVar, TypeAlias, TypeVar
 
 from __experimental__._features import (
+    elide_cast as _elide_cast,
     inline_import as _inline_import,
     late_bound_arg_defaults as _late_bound_arg_defaults,
     lazy_import as _lazy_import,
@@ -131,6 +133,18 @@ lazy_import = _ExperimentalFeature(
     reference="https://peps.python.org/pep-0690/",
 )
 
+elide_cast = _ExperimentalFeature(
+    "elide_cast",
+    "2024.05.03",
+    transformers=_Transformers(
+        None,
+        None,
+        _elide_cast.transform_ast,
+        _elide_cast.parse,
+    ),
+    reference="Discussions about the runtime cost of typing.cast.",
+)
+
 
 class _ExperimentalLoader(importlib.machinery.SourceFileLoader):
     def create_module(self, spec: importlib.machinery.ModuleSpec) -> "types.ModuleType | None":
@@ -195,7 +209,7 @@ _MODIFIED_SUPPORTED_FILE_LOADERS = [
 ]
 
 
-def install() -> None:
+def install_experimental_import_hook() -> None:
     for i, hook in enumerate(sys.path_hooks):
         if "FileFinder.path_hook" in hook.__qualname__:
             new_hook = importlib.machinery.FileFinder.path_hook(*_MODIFIED_SUPPORTED_FILE_LOADERS)
@@ -204,7 +218,7 @@ def install() -> None:
             break
 
 
-def uninstall() -> None:
+def uninstall_experimental_import_hook() -> None:
     for i, hook in enumerate(sys.path_hooks):
         if "FileFinder.path_hook" in hook.__qualname__ and hasattr(hook, "_original_path_hook_for_FileFinder"):
             sys.path_hooks[i] = hook._original_path_hook_for_FileFinder  # type: ignore # Runtime attribute access.

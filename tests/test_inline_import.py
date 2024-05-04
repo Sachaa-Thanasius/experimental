@@ -198,7 +198,7 @@ def test_import_statement(invalid_source: str):
 
 
 def test_importer_name_not_mangled():
-    # If import_expression.constants.IMPORTER.startswith('__'), this will fail.
+    # If the import marker starts with '__', this will fail due to name mangling.
     _ = inline_import.parse("class Foo: x = io!")
 
 

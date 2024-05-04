@@ -26,7 +26,6 @@ import enum
 import re
 import tokenize
 from collections.abc import Generator, Iterable
-from re import Pattern
 
 __all__ = ("get_imported_experimental_flags",)
 
@@ -55,11 +54,11 @@ NAMES = rf"\((?:\s+|,|{NAME}|{ESCAPED_NL}|{COMMENT})*\)"
 STRING = rf"{PREFIX}(?:{DOUBLE_3}|{SINGLE_3}|{DOUBLE_1}|{SINGLE_1})"
 
 
-def _create_pattern(base: str, pats: tuple[str, ...]) -> Pattern[str]:
+def _create_pattern(base: str, pats: tuple[str, ...]) -> re.Pattern[str]:
     return re.compile(rf'{base}(?:{"|".join(pats)})*({COMMENT})?(?:\n|$)')
 
 
-TOKENIZE: tuple[tuple[TokenType, Pattern[str]], ...] = (
+TOKENIZE: tuple[tuple[TokenType, re.Pattern[str]], ...] = (
     (TokenType.IMPORT, _create_pattern(IMPORT, (WS, NAME, OP, ESCAPED_NL, NAMES))),
     (TokenType.NEWLINE, _create_pattern(EMPTY, ())),
     (TokenType.STRING, _create_pattern(STRING, (WS, STRING, ESCAPED_NL))),

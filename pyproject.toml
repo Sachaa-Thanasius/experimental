@@ -4,9 +4,9 @@ build-backend = "hatchling.build"
 
 [project]
 name = "experimental"
-description = "A package with some experimental code transformations activated via '__future__'-like imports."
+description = "Code transformations activated via `from __experimental__ import ...`."
 requires-python = ">=3.10"
-version = "2024.04.16"
+version = "2024.05.03"
 readme = "README.md"
 license = "MIT"
 authors = [
@@ -43,7 +43,7 @@ try:
 except ImportError:
     pass
 else:
-    __experimental__.install()
+    __experimental__.install_experimental_import_hook()
 """
 
 # ======== Testing-related config.
@@ -114,8 +114,7 @@ select = [
     "RUF",
 ]
 ignore = [
-    "S101", # Use of assert here is a known quantity. Blame typing memes.
-    # "PLR2004", # Magic value comparison. May remove later.
+    "S101", # Use of assert here is a known quantity.
     "SIM105", # Suppressable exception. contextlib.suppress is a stylistic choice with overhead.
     "C90",    # McCabe complexity memes.
     "ANN101", # Type of self is usually implicit.

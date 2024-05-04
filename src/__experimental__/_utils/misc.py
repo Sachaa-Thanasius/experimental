@@ -1,4 +1,3 @@
-import functools
 from collections.abc import Callable
 from typing import Any, ParamSpec, TypeVar
 
@@ -15,6 +14,10 @@ def copy_annotations(original_func: Callable[_P, _T]) -> Callable[[Callable[...,
     """
 
     def inner(new_func: Callable[..., Any]) -> Callable[_P, _T]:
-        return functools.update_wrapper(new_func, original_func, ("__annotations__"))  # type: ignore
+        try:
+            new_func.__annotations__ = original_func.__annotations__
+        except AttributeError:
+            pass
+        return new_func  # type: ignore
 
     return inner

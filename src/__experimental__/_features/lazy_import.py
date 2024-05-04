@@ -60,14 +60,14 @@ class _LazyFinder(importlib.abc.MetaPathFinder):
 _LAZY_FINDER = _LazyFinder()
 
 
-def lazy_install() -> None:
+def install_lazy_import_hook() -> None:
     """Add a `_LazyFinder` singleton instance to `sys.meta_path`."""
 
     if _LAZY_FINDER not in sys.meta_path:
         sys.meta_path.insert(0, _LAZY_FINDER)
 
 
-def lazy_uninstall() -> None:
+def uninstall_lazy_import_hook() -> None:
     """Attempt to remove a `_LazyFinder` singleton instance from `sys.meta_path`."""
 
     try:
@@ -86,17 +86,17 @@ class lazy_module_import:
     """
 
     def __enter__(self):
-        lazy_install()
+        install_lazy_import_hook()
         return self
 
     def __exit__(self, *exc: object):
-        lazy_uninstall()
+        uninstall_lazy_import_hook()
 
 
 class LazyImportTransformer(ast.NodeTransformer):
-    """An AST transformer that adds a call to `lazy_install` to the start of the module (after docstrings, __future__
-    imports, and __experimental__ imports) and a call to `lazy_uninstall` at the end of the module. This way, all
-    imports within the module will occur lazily.
+    """An AST transformer that adds a call to `install_lazy_import_hook` to the start of the module (after docstrings,
+    __future__ imports, and __experimental__ imports) and a call to `uninstall_lazy_import_hook` at the end of the
+    module. This way, all imports within the module will occur lazily.
     """
 
     def visit_Module(self, node: ast.Module) -> ast.AST:
@@ -113,11 +113,16 @@ class LazyImportTransformer(ast.NodeTransformer):
 
             position += 1
 
-        aliases = [ast.alias("lazy_install", "@lazy_install"), ast.alias("lazy_uninstall", "@lazy_uninstall")]
+        aliases = [
+            ast.alias("install_lazy_import_hook", "@install_lazy_import_hook"),
+            ast.alias("uninstall_lazy_import_hook", "@uninstall_lazy_import_hook"),
+        ]
         imports = ast.ImportFrom(module="__experimental__._features.lazy_import", names=aliases, level=0)
-        install_expr = ast.Expr(value=ast.Call(func=ast.Name(id="@lazy_install", ctx=ast.Load()), args=[], keywords=[]))
+        install_expr = ast.Expr(
+            value=ast.Call(func=ast.Name(id="@install_lazy_import_hook", ctx=ast.Load()), args=[], keywords=[]),
+        )
         uninstall_expr = ast.Expr(
-            value=ast.Call(func=ast.Name(id="@lazy_uninstall", ctx=ast.Load()), args=[], keywords=[]),
+            value=ast.Call(func=ast.Name(id="@uninstall_lazy_import_hook", ctx=ast.Load()), args=[], keywords=[]),
         )
 
         node.body.insert(position, imports)

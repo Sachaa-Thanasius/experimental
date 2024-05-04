@@ -1,9 +1,9 @@
 from __experimental__._base import (
     inline_import,
-    install,
+    install_experimental_import_hook,
     late_bound_arg_defaults,
     lazy_import,
-    uninstall,
+    uninstall_experimental_import_hook,
 )
 from __experimental__._features.lazy_import import lazy_module_import
 
@@ -19,6 +19,6 @@ __all__ = (
     "late_bound_arg_defaults",
     "lazy_import",
     "lazy_module_import",
-    "install",
-    "uninstall",
+    "install_experimental_import_hook",
+    "uninstall_experimental_import_hook",
 )

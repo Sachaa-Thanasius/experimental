@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 name = "experimental"
 description = "Code transformations activated via `from __experimental__` imports."
 requires-python = ">=3.10"
-version = "2024.05.03"
+version = "2024.05.08"
 readme = "README.md"
 license = "MIT"
 authors = [
@@ -141,7 +141,7 @@ unfixable = [
 [tool.ruff.lint.extend-per-file-ignores]
 "tests/*" = [
     "T201",    # Printing is fine.
-    "ANN",     # Don't need many type annotations, especially return ones.
+    "ANN",     # Don't need many type annotations, especially return ones; they'll be provided as needed.
     "PLR0913", # Too many parameters.
     "PLR2004", # Magic value comparison.
     "F841",    # Unused variable.
@@ -166,6 +166,7 @@ keep-runtime-typing = true
 
 [tool.pyright]
 include = ["src/__experimental__"]
+ignore = ["tests/test_utils.py"]
 pythonVersion = "3.10"
 typeCheckingMode = "strict"
 

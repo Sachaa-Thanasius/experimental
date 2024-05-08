@@ -1,4 +1,7 @@
+import ast
+
 import pytest
+from __experimental__._utils.ast_helpers import collapse_plain_attribute_or_name, compare_ast
 from __experimental__._utils.token_helpers import get_imported_experimental_flags
 
 empty_set: set[str] = set()
@@ -69,3 +72,51 @@ empty_set: set[str] = set()
 def test_get_imported_experimental_flags(test_source: str, expected_result: set[str]):
     result = get_imported_experimental_flags(test_source)
     assert result == expected_result
+
+
+@pytest.mark.parametrize(
+    ("test_source", "expected_result"),
+    [
+        ("a", "a"),
+        ("a.b.c", "a.b.c"),
+        ("a.b.c.d.e.f", "a.b.c.d.e.f"),
+    ],
+)
+def test_collapse_plain_attribute_or_name(test_source: str, expected_result: str):
+    tree = ast.parse(test_source)
+    node = tree.body[0].value
+    assert collapse_plain_attribute_or_name(node) == expected_result
+
+
+@pytest.mark.parametrize(
+    "test_source",
+    [
+        "a[0]",
+        "a.b.c[0]",
+        "a.b.c.d[1].e.f",
+        "a.b.c.d().e.f",
+    ],
+)
+def test_collapse_plain_attribute_or_name_bad_input(test_source: str):
+    tree = ast.parse(test_source)
+    node = tree.body[0].value
+    with pytest.raises(TypeError):
+        collapse_plain_attribute_or_name(node)
+
+
+@pytest.mark.parametrize(
+    ("test_source", "expected_result"),
+    [
+        ("a = func(a)", True),
+        ("a[0] = func(a[0])", True),
+        ("a.b.c = func(a.b.c)", True),
+        ("a.b = func(a)", False),
+        ("a = func(a.b)", False),
+        ("hello().a = func(a)", False),
+    ],
+)
+def test_compare_ast(test_source: str, expected_result: bool):
+    tree = ast.parse(test_source)
+    left_side = tree.body[0].targets[0]
+    first_arg = tree.body[0].value.args[0]
+    assert compare_ast(left_side, first_arg) == expected_result

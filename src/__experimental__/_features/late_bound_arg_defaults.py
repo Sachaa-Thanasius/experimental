@@ -15,7 +15,9 @@ from __experimental__._utils.misc import copy_annotations
 from __experimental__._utils.peekable import Peekable
 from __experimental__._utils.token_helpers import offset_line_horizontal
 
-if TYPE_CHECKING:
+if sys.version_info > (3, 12):
+    from collections.abc import Buffer as ReadableBuffer
+elif TYPE_CHECKING:
     from typing_extensions import Buffer as ReadableBuffer
 else:
     ReadableBuffer = bytes
@@ -143,11 +145,12 @@ class LateBoundDefaultTransformer(ast.NodeTransformer):
         )
         return ast.Call(func=ast.Name(id="@defer", ctx=ast.Load()), args=[new_lambda], keywords=[])
 
-    def _replace_late_bound_markers(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
+    @classmethod
+    def _replace_late_bound_markers(cls, node: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
         # Replace the markers in the function defaults with actual defer objects.
         all_func_defaults = node.args.defaults + node.args.kw_defaults
         try:
-            next(default for default in all_func_defaults if default is not None and self._is_marker_node(default))
+            next(default for default in all_func_defaults if default is not None and cls._is_marker_node(default))
         except StopIteration:
             return
 
@@ -156,11 +159,11 @@ class LateBoundDefaultTransformer(ast.NodeTransformer):
         default_offset = len(positional_args) - len(node.args.defaults)
 
         markers_in_defaults = [
-            (index, default) for index, default in enumerate(node.args.defaults) if self._is_marker_node(default)
+            (index, default) for index, default in enumerate(node.args.defaults) if cls._is_marker_node(default)
         ]
         for index, marker in markers_in_defaults:
             actual_index = index + default_offset
-            node.args.defaults[index] = self._replace_marker_node(marker, actual_index, positional_args)
+            node.args.defaults[index] = cls._replace_marker_node(marker, actual_index, positional_args)
 
         # Handle args that are keyword-only.
         all_args = positional_args + node.args.kwonlyargs
@@ -169,14 +172,15 @@ class LateBoundDefaultTransformer(ast.NodeTransformer):
         markers_in_kw_defaults = [
             (index, kw_default)
             for index, kw_default in enumerate(node.args.kw_defaults)
-            if self._is_marker_node(kw_default)
+            if cls._is_marker_node(kw_default)
         ]
 
         for index, marker in markers_in_kw_defaults:
             actual_index = index + kw_default_offset
-            node.args.kw_defaults[index] = self._replace_marker_node(marker, actual_index, all_args)
+            node.args.kw_defaults[index] = cls._replace_marker_node(marker, actual_index, all_args)
 
-    def _add_late_binding_evaluate_call(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
+    @staticmethod
+    def _add_late_binding_evaluate_call(node: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
         # Put a call to evaluate the defer objects, the late bindings, as the first line of the function.
         evaluate_expr = ast.Expr(
             value=ast.Call(
@@ -192,15 +196,16 @@ class LateBoundDefaultTransformer(ast.NodeTransformer):
             case _:
                 node.body.insert(0, evaluate_expr)
 
-    def visit_FunctionDef(self, node: ast.FunctionDef) -> ast.AST:
+    def _visit_Func(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> ast.AST:
         self._replace_late_bound_markers(node)
         self._add_late_binding_evaluate_call(node)
         return self.generic_visit(node)
 
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> ast.AST:
+        return self._visit_Func(node)
+
     def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> ast.AST:
-        self._replace_late_bound_markers(node)
-        self._add_late_binding_evaluate_call(node)
-        return self.generic_visit(node)
+        return self._visit_Func(node)
 
     def visit_Module(self, node: ast.Module) -> ast.AST:
         """Import the defer type and evaluation function so that the late binding-related symbols are valid."""
@@ -236,15 +241,19 @@ def transform_ast(tree: ast.AST) -> ast.Module:
 # Some of the parameter annotations are too narrow or wide, but they should be "overriden" by this decorator.
 @copy_annotations(ast.parse)
 def parse(
-    source: str | ReadableBuffer,
+    source: str | bytes,
     filename: str = "<unknown>",
     mode: str = "exec",
     *,
     type_comments: bool = False,
     feature_version: tuple[int, int] | None = None,
 ) -> ast.Module:
-    """Convert source code with late-bound function argument defaults to a valid AST. Has the same signature as
-    `ast.parse`: see that for more details about the parameters.
+    """Convert source code with late-bound function argument defaults to a valid AST.
+
+    Notes
+    -----
+    The runtime annotations for this method are a bit off; see `ast.parse`, the function this wraps, for details about the
+    actual signature.
     """
 
     return transform_ast(

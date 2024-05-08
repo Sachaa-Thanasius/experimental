@@ -7,15 +7,8 @@ import importlib.util
 import sys
 import types
 from collections.abc import Sequence
-from typing import TYPE_CHECKING
 
 from __experimental__._utils.misc import copy_annotations
-
-if TYPE_CHECKING:
-    from typing_extensions import Buffer as ReadableBuffer
-else:
-    ReadableBuffer = bytes
-
 
 __all__ = ("lazy_module_import", "transform_ast", "parse")
 
@@ -44,7 +37,7 @@ class _LazyFinder(importlib.abc.MetaPathFinder):
 
         if spec.loader is None:
             # Technically eager to say it's missing for sure here, but seems like the simplest path.
-            # References (CPython 3.11):
+            # References for regular behavior upon discovering a missing loader (CPython 3.11):
             # - importlib._bootstrap_external.PathFinder._get_spec
             # - importlib._bootstrap._load_unlocked
             # - importlib._bootstrap._exec
@@ -93,9 +86,15 @@ class lazy_module_import:
 
 
 class LazyImportTransformer(ast.NodeTransformer):
-    """An AST transformer that adds a call to `install_lazy_import_hook` to the start of the module (after docstrings,
-    __future__ imports, and __experimental__ imports) and a call to `uninstall_lazy_import_hook` at the end of the
-    module. This way, all imports within the module will occur lazily.
+    """An AST transformer that adds function calls to the start and end of a module to install and uninstall the
+    lazy import hook, respectively.
+
+    Notes
+    -----
+    This prepends the inserted function names with "@" to avoid colliding with names in user code.
+
+    This doesn't insert the install until after all consecutive docstrings, __future__ imports, and
+    __experimental__ imports.
     """
 
     def visit_Module(self, node: ast.Module) -> ast.AST:
@@ -138,15 +137,19 @@ def transform_ast(tree: ast.AST) -> ast.Module:
 # Some of the parameter annotations are too narrow or wide, but they should be "overriden" by this decorator.
 @copy_annotations(ast.parse)
 def parse(
-    source: str | ReadableBuffer,
+    source: str | bytes,
     filename: str = "<unknown>",
     mode: str = "exec",
     *,
     type_comments: bool = False,
     feature_version: tuple[int, int] | None = None,
 ) -> ast.Module:
-    """Convert source code to a valid AST with module-wide lazy imports enabled. Has the same signature as
-    `ast.parse`.
+    """Convert source code to a valid AST with module-wide lazy imports enabled.
+
+    Notes
+    -----
+    The runtime annotations for this method are a bit off; see `ast.parse`, the function this wraps, for details about the
+    actual signature.
     """
 
     return transform_ast(

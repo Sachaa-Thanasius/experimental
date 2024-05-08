@@ -23,6 +23,10 @@ class Class:
     def func3(self, d):
         import typing as tp
         return tp.cast(list, d)
+
+    def func4(self, e):
+        from unrelated import cast
+        return cast(tuple, e)
 """
 
 EXPECTED = """\
@@ -42,7 +46,11 @@ class Class:
 
     def func3(self, d):
         import typing as tp
-        return d\
+        return d
+
+    def func4(self, e):
+        from unrelated import cast
+        return cast(tuple, e)\
 """
 
 

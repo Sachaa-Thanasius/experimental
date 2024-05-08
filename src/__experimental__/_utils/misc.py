@@ -1,19 +1,20 @@
 from collections.abc import Callable
-from typing import Any, ParamSpec, TypeVar
+from typing import ParamSpec, TypeVar
 
-_T = TypeVar("_T")
-_P = ParamSpec("_P")
+T = TypeVar("T")
+P = ParamSpec("P")
 
 __all__ = ("copy_annotations",)
 
 
-def copy_annotations(original_func: Callable[_P, _T]) -> Callable[[Callable[..., Any]], Callable[_P, _T]]:
+def copy_annotations(original_func: Callable[P, T]) -> Callable[[Callable[..., object]], Callable[P, T]]:
     """A decorator that applies the annotations from one function onto another.
 
     It can be a lie, but it aids the type checker and any IDE intellisense.
     """
 
-    def inner(new_func: Callable[..., Any]) -> Callable[_P, _T]:
+    def inner(new_func: Callable[..., object]) -> Callable[P, T]:
+        # functools.wraps is overkill for this.
         try:
             new_func.__annotations__ = original_func.__annotations__
         except AttributeError:

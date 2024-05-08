@@ -1,16 +1,20 @@
 """An implementation of inline import expressions in pure Python."""
 
 import ast
+import sys
 import tokenize
 from collections.abc import Iterable
 from io import BytesIO
 from typing import TYPE_CHECKING
 
+from __experimental__._utils.ast_helpers import collapse_plain_attribute_or_name
 from __experimental__._utils.misc import copy_annotations
 from __experimental__._utils.peekable import Peekable
 from __experimental__._utils.token_helpers import offset_line_horizontal, offset_token_horizontal
 
-if TYPE_CHECKING:
+if sys.version_info > (3, 12):
+    from collections.abc import Buffer as ReadableBuffer
+elif TYPE_CHECKING:
     from typing_extensions import Buffer as ReadableBuffer
 else:
     ReadableBuffer = bytes
@@ -126,17 +130,6 @@ def transform_source(source: str | ReadableBuffer) -> str:
 class InlineImportTransformer(ast.NodeTransformer):
     """An AST transformer that replaces `_IMPORTLIB_MARKER(...)` with `__import__("importlib").import_module(...)`."""
 
-    @classmethod
-    def _collapse_attributes(cls, node: ast.Attribute | ast.Name) -> str:
-        match node:
-            case ast.Name():
-                return node.id
-            case ast.Attribute(value=(ast.Attribute() | ast.Name()) as value):
-                return cls._collapse_attributes(value) + f".{node.attr}"
-            case _:
-                msg = "Only names and attribute access (dot operator) can be within the inline import expression."
-                raise SyntaxError(msg)
-
     def visit_Call(self, node: ast.Call) -> ast.AST:
         """Replace the _IMPORTLIB_MARKER calls with a valid inline import expression."""
 
@@ -151,7 +144,13 @@ class InlineImportTransformer(ast.NodeTransformer):
                     attr="import_module",
                     ctx=ast.Load(),
                 )
-                node.args[0] = ast.Constant(value=self._collapse_attributes(arg))
+
+                try:
+                    node.args[0] = ast.Constant(value=collapse_plain_attribute_or_name(arg))
+                except TypeError:
+                    msg = "Only names and attribute access (dot operator) can be within the inline import expression."
+                    raise SyntaxError(msg) from None
+
             case _:
                 pass
 
@@ -167,14 +166,20 @@ def transform_ast(tree: ast.AST) -> ast.Module:
 # Some of the parameter annotations are too narrow or wide, but they should be "overriden" by this decorator.
 @copy_annotations(ast.parse)
 def parse(
-    source: str | ReadableBuffer,
+    source: str | bytes,
     filename: str = "<unknown>",
     mode: str = "exec",
     *,
     type_comments: bool = False,
     feature_version: tuple[int, int] | None = None,
 ) -> ast.Module:
-    """Convert source code with inline import expressions to a valid AST. Has the same signature as `ast.parse`."""
+    """Convert source code with inline import expressions to a valid AST.
+
+    Notes
+    -----
+    The runtime annotations for this method are a bit off; see `ast.parse`, the function this wraps, for details about the
+    actual signature.
+    """
 
     return transform_ast(
         ast.parse(

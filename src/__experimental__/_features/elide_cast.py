@@ -3,14 +3,8 @@
 import ast
 from collections import ChainMap
 from types import MappingProxyType
-from typing import TYPE_CHECKING
 
 from __experimental__._utils.misc import copy_annotations
-
-if TYPE_CHECKING:
-    from typing_extensions import Buffer as ReadableBuffer
-else:
-    ReadableBuffer = bytes
 
 __all__ = ("transform_ast", "parse")
 
@@ -88,14 +82,20 @@ def transform_ast(tree: ast.AST) -> ast.Module:
 # Some of the parameter annotations are too narrow or wide, but they should be "overriden" by this decorator.
 @copy_annotations(ast.parse)
 def parse(
-    source: str | ReadableBuffer,
+    source: str | bytes,
     filename: str = "<unknown>",
     mode: str = "exec",
     *,
     type_comments: bool = False,
     feature_version: tuple[int, int] | None = None,
 ) -> ast.Module:
-    """Convert source code with elided cast calls to a valid AST. Has the same signature as `ast.parse`."""
+    """Convert source code with elided cast calls to a valid AST.
+
+    Notes
+    -----
+    The runtime annotations for this method are a bit off; see `ast.parse`, the function this wraps, for details about the
+    actual signature.
+    """
 
     return transform_ast(
         ast.parse(

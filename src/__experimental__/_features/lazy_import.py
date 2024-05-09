@@ -81,7 +81,7 @@ class lazy_module_import:
         install_lazy_import_hook()
         return self
 
-    def __exit__(self, *exc: object):
+    def __exit__(self, *exc_info: object):
         uninstall_lazy_import_hook()
 
 

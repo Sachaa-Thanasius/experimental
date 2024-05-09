@@ -101,20 +101,19 @@ select = [
     "PIE",
     "T20",
     "PYI",
+    "PT",
     "RSE",
     "RET",
     "SIM",
     "TID",
     "PTH",
     "ERA",
-    "PD",
     "PL",
     "TRY",
-    "NPY",
     "RUF",
 ]
 ignore = [
-    "S101", # Use of assert here is a known quantity.
+    "S101",   # Use of assert here is a known quantity.
     "SIM105", # Suppressable exception. contextlib.suppress is a stylistic choice with overhead.
     "C90",    # McCabe complexity memes.
     "ANN101", # Type of self is usually implicit.

@@ -8,7 +8,7 @@ empty_set: set[str] = set()
 
 
 @pytest.mark.parametrize(
-    "test_source, expected_result",
+    ("test_source", "expected_result"),
     [
         pytest.param("", empty_set, id="trivial"),
         pytest.param(

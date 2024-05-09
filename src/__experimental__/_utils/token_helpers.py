@@ -27,7 +27,7 @@ import re
 import tokenize
 from collections.abc import Generator, Iterable
 
-__all__ = ("get_imported_experimental_flags",)
+__all__ = ("get_imported_experimental_flags", "offset_token_horizontal", "offset_line_horizontal")
 
 
 class TokenType(enum.Enum):

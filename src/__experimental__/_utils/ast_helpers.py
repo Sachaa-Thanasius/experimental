@@ -51,7 +51,7 @@ def compare_ast(first_node: ast.AST | list[ast.AST] | Any, second_node: ast.AST 
 
     Notes
     -----
-    The algorithm is modified from https://stackoverflow.com/a/19598419.
+    The algorithm is modified from https://stackoverflow.com/a/19598419 to be iterative instead of recursive.
     """
 
     nodes = deque([(first_node, second_node)])

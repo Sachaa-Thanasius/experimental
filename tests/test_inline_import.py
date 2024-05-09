@@ -9,7 +9,7 @@ from __experimental__._features import inline_import
 
 
 @pytest.mark.parametrize(
-    "test_source, expected_result",
+    ("test_source", "expected_result"),
     [
         (
             "collections!.Counter(urllib.parse!.quote('foo'))",
@@ -25,7 +25,7 @@ def test_transform_source(test_source: str, expected_result: str):
 
 
 @pytest.mark.parametrize(
-    "test_source, expected_result",
+    ("test_source", "expected_result"),
     [
         ("collections!.Counter(urllib.parse!.quote('foo'))", {"f": 1, "o": 2}),
         ("ipaddress!.IPV6LENGTH", ipaddress.IPV6LENGTH),
@@ -41,7 +41,7 @@ def test_parse(test_source: str, expected_result: Any):
 
 
 @pytest.mark.parametrize(
-    "test_fstring, expected_result",
+    ("test_fstring", "expected_result"),
     [
         ("f'{value!r}'", "'Here I am'"),
         ("f'{value!r:20}'", "'Here I am'         "),
@@ -161,7 +161,7 @@ def test_kwargs():
 
 
 @pytest.mark.parametrize(
-    "test_source, annotation_var",
+    ("test_source", "annotation_var"),
     [
         ("def test_func() -> typing!.Any: pass", "return"),
         ("def test_func(x: typing!.Any): pass", "x"),

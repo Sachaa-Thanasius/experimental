@@ -12,7 +12,7 @@ from __experimental__._utils.misc import copy_annotations
 from __experimental__._utils.peekable import Peekable
 from __experimental__._utils.token_helpers import offset_line_horizontal, offset_token_horizontal
 
-if sys.version_info > (3, 12):
+if sys.version_info >= (3, 12):
     from collections.abc import Buffer as ReadableBuffer
 elif TYPE_CHECKING:
     from typing_extensions import Buffer as ReadableBuffer

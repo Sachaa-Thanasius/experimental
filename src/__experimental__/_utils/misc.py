@@ -19,6 +19,6 @@ def copy_annotations(original_func: Callable[P, T]) -> Callable[[Callable[..., o
             new_func.__annotations__ = original_func.__annotations__
         except AttributeError:
             pass
-        return new_func  # type: ignore
+        return new_func  # type: ignore # A lie.
 
     return inner

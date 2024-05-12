@@ -23,6 +23,7 @@
 # THE SOFTWARE.
 
 import enum
+import keyword
 import re
 import tokenize
 from collections.abc import Generator, Iterable
@@ -43,7 +44,6 @@ DOUBLE_3 = r'"""[^"\\]*(?:(?:\\.|\\\n|"(?!""))[^"\\]*)*"""'
 SINGLE_3 = r"'''[^'\\]*(?:(?:\\.|\\\n|'(?!''))[^'\\]*)*'''"
 DOUBLE_1 = r'"[^"\\]*(?:\\.[^"\\]*)*"'
 SINGLE_1 = r"'[^'\\]*(?:\\.[^'\\]*)*'"
-
 
 WS = r"[ \f\t]+"
 IMPORT = rf"(?:from|import)(?={WS})"
@@ -86,9 +86,9 @@ def get_imported_experimental_flags(source: str) -> set[str]:
     potential_flags: set[str] = set()
     for tok_type, line in _tokenize_pre_code(source):
         if tok_type is TokenType.IMPORT and line.startswith(_FROM_EXPERIMENTAL):
-            potential_line = re.sub(COMMENT, "", line[len(_FROM_EXPERIMENTAL) :])
+            potential_line = re.sub(COMMENT, "", line.removeprefix(_FROM_EXPERIMENTAL))
             for name in re.finditer(NAME, potential_line):
-                if name[0] == "as":
+                if keyword.iskeyword(name[0]):
                     continue
                 potential_flags.add(name[0])
     return potential_flags

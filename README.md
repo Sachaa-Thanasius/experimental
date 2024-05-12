@@ -4,11 +4,13 @@ Yet another way of messing with non-existent features in Python.
 This is a personal `__future__`-like collection of features that will only be active if imported from `__experimental__` near the top of a Python file. Some of those features include:
 
 - Late-bound function argument defaults
-    - Based on [PEP 671](https://peps.python.org/pep-0671/)
+    - Based on [PEP 671](https://peps.python.org/pep-0671/).
 - Module-level and context manager-level lazy imports
-    - Based on [PEP 690](https://peps.python.org/pep-0690/) and a whole bunch of other attempts at lazy importing.
+    - Based on [PEP 690](https://peps.python.org/pep-0690/) and a whole bunch of other attempts at lazy importing. Does not handle `from` imports at this point; those would be eagerly loaded.
 - Inline import expressions
-    - Based on [import-expression](https://github.com/ioistired/import-expression-parser)
+    - Based on [import-expression](https://github.com/ioistired/import-expression-parser).
+- Elision of `typing.cast`/`typing_extensions.cast`
+    - Based on past discussions had about possibly eliminating the cost of `cast`.
 
 They shouldn't be mutually exclusive syntax-wise.
 
@@ -25,7 +27,7 @@ I don't see a reason to put this on PyPI as of now.
 """example1.py"""
 from __experimental__ import late_bound_arg_defaults
 
-def bisect_right(a, x, lo=0, hi=>len(a), *, key=None):
+def bisect_right(a, x, lo=0, hi=>(len(a)), *, key=None):
     # If nothing is passed in for hi, only then will it evaluate as len(a).
     # Late-bound defaults will be evaluated in left-to-right order.
     ...
@@ -49,9 +51,9 @@ from __experimental__ import lazy_import
 
 
 ## Caveats
-This package uses a `.pth` file to register an import hook on interpreter startup. It hooks into the Python import system to add a custom [`MetaPathFinder`](https://docs.python.org/3/library/importlib.html#importlib.abc.MetaPathFinder) to [`sys.meta_path`](https://docs.python.org/3/library/sys.html#sys.meta_path). That should work fine if you're using a regular setup with site packages, where that `.pth` file should end up.
+This package uses a `.pth` file to register an import hook on interpreter startup. The hook replaces the built-in file finder's [`path hook`](https://docs.python.org/3/library/importlib.html#importlib.machinery.FileFinder.path_hook) on [`sys.path_hooks`](https://docs.python.org/3/library/sys.html#sys.path_hooks). That should work fine if you're using a regular setup with site packages, where that `.pth` file should end up.
 
-However, if your environment is atypical, you might need to manually register that finder to have your code be processed by this package. Do so in a file away from the rest of your code. For example:
+However, if your environment is atypical, you might need to manually register that finder to have your code be processed by this package. Do so in a file away from the rest of your code, before any of it executes. For example:
 
 ```py
 import __experimental__

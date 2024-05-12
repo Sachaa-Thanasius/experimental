@@ -1,12 +1,14 @@
-"""An implementation of lazy imports (PEP 690) with a context manager and module-wide in pure Python."""
+"""A partial implementation of lazy imports (PEP 690) with a context manager and module-wide in pure Python."""
 
 import ast
+import contextlib
 import importlib.abc
 import importlib.machinery
 import importlib.util
 import sys
 import types
-from collections.abc import Sequence
+from collections.abc import Generator, Sequence
+from typing import Any
 
 from __experimental__._utils.misc import copy_annotations
 
@@ -68,20 +70,20 @@ def uninstall_lazy_import_hook() -> None:
         pass
 
 
-class lazy_module_import:
+@contextlib.contextmanager
+def lazy_module_import() -> Generator[None, Any, None]:
     """A context manager that causes imports occuring within it to occur lazily.
 
     Notes
     -----
-    This class is dead simple: It adds a special finder to `sys.meta_path` and then removes it. That finder wraps the
+    Implementation details: It adds a special finder to `sys.meta_path` and then removes it. That finder wraps the
     loaders of imported modules with `importlib.util.LazyLoader`.
     """
 
-    def __enter__(self):
-        install_lazy_import_hook()
-        return self
-
-    def __exit__(self, *exc_info: object):
+    install_lazy_import_hook()
+    try:
+        yield
+    finally:
         uninstall_lazy_import_hook()
 
 

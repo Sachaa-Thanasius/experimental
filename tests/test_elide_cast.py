@@ -17,6 +17,7 @@ class Class:
         return mycast(bool, a)
 
     def func2(self, c):
+        c = tpe.cast(str, c)
         thing = tpecast(bool, c)
         return tpe.cast(str, c)
 
@@ -58,9 +59,10 @@ def test_cast_tracking():
     expected = [
         ("typing.cast", "mycast", 9),
         ("typing.cast", "mycast", 12),
-        ("typing_extensions.cast", "tpecast", 15),
-        ("typing_extensions.cast", "tpe.cast", 16),
-        ("typing.cast", "tp.cast", 20),
+        ("typing_extensions.cast", "tpe.cast", 15),
+        ("typing_extensions.cast", "tpecast", 16),
+        ("typing_extensions.cast", "tpe.cast", 17),
+        ("typing.cast", "tp.cast", 21),
     ]
 
     transformer = elide_cast.CastElisionTransformer()

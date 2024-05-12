@@ -4,6 +4,7 @@ import ast
 from collections import ChainMap
 from types import MappingProxyType
 
+from __experimental__._utils.ast_helpers import compare_ast
 from __experimental__._utils.misc import copy_annotations
 
 __all__ = ("transform_ast", "parse")
@@ -59,18 +60,39 @@ class CastElisionTransformer(ast.NodeTransformer):
 
     def visit_Call(self, node: ast.Call) -> ast.AST:
         match node:
-            case ast.Call(func=ast.Name(id=name), args=[_, new_node]) if imported_name := self.scopes.get(name):
+            case ast.Call(func=ast.Name(id=name), args=[_, right_side]) if imported_name := self.scopes.get(name):
                 self.used_at.append((imported_name, name, node.lineno))
-                mod_node = new_node
+                mod_node = right_side
+
             case ast.Call(
-                func=ast.Attribute(value=ast.Name(id=mod_name), attr="cast"), args=[_, new_node]
+                func=ast.Attribute(value=ast.Name(id=mod_name), attr="cast"), args=[_, right_side]
             ) if imported_name := self.scopes.get(mod_name):
                 self.used_at.append((f"{imported_name}.cast", f"{mod_name}.cast", node.lineno))
-                mod_node = new_node
+                mod_node = right_side
+
             case _:
                 mod_node = node
 
         return self.generic_visit(mod_node)
+
+    def visit_Assign(self, node: ast.Assign) -> ast.AST | None:
+        match node:
+            case ast.Assign(
+                targets=[left_side],
+                value=ast.Call(func=ast.Name(id=name), args=[_, right_side]),
+            ) if (imported_name := self.scopes.get(name)) and compare_ast(left_side, right_side):
+                self.used_at.append((imported_name, name, node.lineno))
+                return None
+
+            case ast.Assign(
+                targets=[left_side],
+                value=ast.Call(func=ast.Attribute(value=ast.Name(id=mod_name), attr="cast"), args=[_, right_side]),
+            ) if (imported_name := self.scopes.get(mod_name)) and compare_ast(left_side, right_side):
+                self.used_at.append((f"{imported_name}.cast", f"{mod_name}.cast", node.lineno))
+                return None
+
+            case _:
+                return self.generic_visit(node)
 
 
 def transform_ast(tree: ast.AST) -> ast.Module:

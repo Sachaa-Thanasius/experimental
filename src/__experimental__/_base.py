@@ -28,7 +28,7 @@ from __experimental__._features import (
 from __experimental__._utils.token_helpers import get_imported_experimental_flags
 
 if TYPE_CHECKING:
-    from typing import Protocol, cast
+    from typing import Protocol
 
     from typing_extensions import Buffer as ReadableBuffer, ParamSpec, Self
 
@@ -38,7 +38,8 @@ if TYPE_CHECKING:
     class _CurryProtocol(Protocol):
         def __call__(self, func: Callable[P, T], *args: P.args, **kwargs: P.kwargs) -> T: ...
 
-    _call_with_frames_removed = cast(_CurryProtocol, _call_with_frames_removed)
+    # Hack to inform type-checker of annotations.
+    _call_with_frames_removed: _CurryProtocol = _call_with_frames_removed  # noqa: PLW0127
 else:
 
     class Self:
@@ -50,6 +51,8 @@ else:
 # Copied from _typeshed - this and ReadableBuffer were marked as stable.
 StrPath: TypeAlias = str | os.PathLike[str]
 
+CompilableAST: TypeAlias = ast.Module | ast.Expression | ast.Interactive
+
 
 class _Transformers:
     __slots__ = ("source_hook", "token_hook", "ast_hook", "parse")
@@ -58,7 +61,7 @@ class _Transformers:
         self,
         source_hook: Callable[[str], str] | None = None,
         token_hook: Callable[[Iterable[tokenize.TokenInfo]], Iterable[tokenize.TokenInfo]] | None = None,
-        ast_hook: Callable[[ast.AST], ast.Module] | None = None,
+        ast_hook: Callable[[CompilableAST], CompilableAST] | None = None,
         parse: Callable[..., ast.Module] | None = None,
     ):
         self.source_hook = source_hook
@@ -83,6 +86,7 @@ class _ExperimentalFeature:
     """
 
     __slots__ = ("name", "date_added", "transformers", "reference")
+
     _registry: ClassVar[dict[str, Self]] = {}
 
     def __init__(self, name: str, date_added: str, *, transformers: _Transformers, reference: str | None = None):
@@ -147,10 +151,7 @@ elide_cast = _ExperimentalFeature(
 
 
 class _ExperimentalLoader(importlib.machinery.SourceFileLoader):
-    def create_module(self, spec: importlib.machinery.ModuleSpec) -> types.ModuleType | None:
-        """Use default semantics for module creation, for now."""
-
-    # Might need a typeshed question. SourceFileLoader generally only gets bytes as data.
+    # Might need a typeshed question. SourceFileLoader generally only gets bytes as data, AFAIK.
     def source_to_code(  # type: ignore
         self,
         data: ReadableBuffer,
@@ -182,15 +183,7 @@ class _ExperimentalLoader(importlib.machinery.SourceFileLoader):
         source = tokenize.untokenize(tokens)
 
         # Apply relevant AST transformations.
-        tree: ast.Module = _call_with_frames_removed(
-            compile,
-            source,
-            path,
-            "exec",
-            dont_inherit=True,
-            optimize=_optimize,
-            flags=ast.PyCF_ONLY_AST,
-        )
+        tree: CompilableAST = _call_with_frames_removed(ast.parse, source, path, "exec")
 
         for feature in features_to_activate:
             if feature.transformers.ast_hook:

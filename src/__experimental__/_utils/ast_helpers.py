@@ -2,7 +2,7 @@ import ast
 from collections import deque
 from typing import Any
 
-__all__ = ("collapse_plain_attribute_or_name", "compare_ast")
+__all__ = ("collapse_plain_attribute_or_name", "compare_asts")
 
 
 def collapse_plain_attribute_or_name(node: ast.Attribute | ast.Name) -> str:
@@ -44,7 +44,7 @@ def collapse_plain_attribute_or_name(node: ast.Attribute | ast.Name) -> str:
     return ".".join(names)
 
 
-def compare_ast(first_node: ast.AST | list[ast.AST] | Any, second_node: ast.AST | list[ast.AST] | Any) -> bool:
+def compare_asts(first_node: ast.AST | list[ast.AST] | Any, second_node: ast.AST | list[ast.AST] | Any) -> bool:
     """Compare two AST nodes for equality, to see if they have the same field structure with the same values.
 
     This only takes into account fields present in a node's _fields list (excluding "ctx").

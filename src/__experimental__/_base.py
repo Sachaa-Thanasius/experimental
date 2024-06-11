@@ -15,9 +15,9 @@ import sys
 import tokenize
 import types
 from collections.abc import Callable, Iterable
-from importlib._bootstrap import _call_with_frames_removed  # type: ignore # Has to come from importlib.
+from importlib._bootstrap import _call_with_frames_removed  # type: ignore # Has to come from importlib, I think.
 from io import BytesIO
-from typing import TYPE_CHECKING, ClassVar, TypeAlias, TypeVar
+from typing import TYPE_CHECKING, ClassVar, TypeAlias
 
 from __experimental__._features import (
     elide_cast as _elide_cast,
@@ -28,7 +28,7 @@ from __experimental__._features import (
 from __experimental__._utils.token_helpers import get_imported_experimental_flags
 
 if TYPE_CHECKING:
-    from typing import Protocol
+    from typing import Protocol, TypeVar
 
     from typing_extensions import Buffer as ReadableBuffer, ParamSpec, Self
 
@@ -205,9 +205,8 @@ _MODIFIED_SUPPORTED_FILE_LOADERS = [
 def install_experimental_import_hook() -> None:
     for i, hook in enumerate(sys.path_hooks):
         if "FileFinder.path_hook" in hook.__qualname__:
-            new_hook = importlib.machinery.FileFinder.path_hook(*_MODIFIED_SUPPORTED_FILE_LOADERS)
+            sys.path_hooks[i] = new_hook = importlib.machinery.FileFinder.path_hook(*_MODIFIED_SUPPORTED_FILE_LOADERS)
             new_hook._original_path_hook_for_FileFinder = hook  # type: ignore # Runtime attribute assignment.
-            sys.path_hooks[i] = new_hook
             break
 
 

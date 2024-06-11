@@ -1,7 +1,7 @@
 import ast
 
 import pytest
-from __experimental__._utils.ast_helpers import collapse_plain_attribute_or_name, compare_ast
+from __experimental__._utils.ast_helpers import collapse_plain_attribute_or_name, compare_asts
 from __experimental__._utils.token_helpers import get_imported_experimental_flags
 
 empty_set: set[str] = set()
@@ -119,4 +119,4 @@ def test_compare_ast(test_source: str, expected_result: bool):
     tree = ast.parse(test_source)
     left_side = tree.body[0].targets[0]
     first_arg = tree.body[0].value.args[0]
-    assert compare_ast(left_side, first_arg) == expected_result
+    assert compare_asts(left_side, first_arg) == expected_result

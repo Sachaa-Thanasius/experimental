@@ -48,16 +48,16 @@ else:
 
 # ======== Testing-related config.
 
-[tool.hatch.envs.test]
+[tool.hatch.envs.tests]
 dependencies = ["coverage[toml]>=6.5", "covdefaults", "pytest"]
 
-[tool.hatch.envs.test.scripts]
+[tool.hatch.envs.tests.scripts]
 test = "pytest {args:tests}"
 test-cov = "coverage run -m pytest {args:tests}"
 cov-report = ["- coverage combine", "coverage report"]
 cov = ["test-cov", "cov-report"]
 
-[[tool.hatch.envs.test.matrix]]
+[[tool.hatch.envs.tests.matrix]]
 python = ["3.10", "3.11", "3.12"]
 
 [tool.pytest.ini_options]

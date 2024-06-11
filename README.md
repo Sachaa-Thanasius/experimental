@@ -5,8 +5,10 @@ This is a personal `__future__`-like collection of features that will only be ac
 
 - Late-bound function argument defaults
     - Based on [PEP 671](https://peps.python.org/pep-0671/).
+    - Currently, the late-bound expressions must be surrounded in parentheses, unlike the syntax proposed in the relevant PEP.
 - Module-level and context manager-level lazy imports
-    - Based on [PEP 690](https://peps.python.org/pep-0690/) and a whole bunch of other attempts at lazy importing. Does not handle `from` imports at this point; those would be eagerly loaded.
+    - Based on [PEP 690](https://peps.python.org/pep-0690/) and several other attempts at lazy importing.
+    - Currently, `from` imports are evaluated eagerly.
 - Inline import expressions
     - Based on [import-expression](https://github.com/ioistired/import-expression-parser).
 - Elision of `typing.cast`/`typing_extensions.cast`
@@ -51,6 +53,7 @@ from __experimental__ import lazy_import
 
 
 ## Caveats
+### Registration
 This package uses a `.pth` file to register an import hook on interpreter startup. The hook replaces the built-in file finder's [`path hook`](https://docs.python.org/3/library/importlib.html#importlib.machinery.FileFinder.path_hook) on [`sys.path_hooks`](https://docs.python.org/3/library/sys.html#sys.path_hooks). That should work fine if you're using a regular setup with site packages, where that `.pth` file should end up.
 
 However, if your environment is atypical, you might need to manually register that finder to have your code be processed by this package. Do so in a file away from the rest of your code, before any of it executes. For example:

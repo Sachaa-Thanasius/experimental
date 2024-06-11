@@ -4,7 +4,7 @@ import ast
 from collections import ChainMap
 from types import MappingProxyType
 
-from __experimental__._utils.ast_helpers import compare_ast
+from __experimental__._utils.ast_helpers import compare_asts
 from __experimental__._utils.misc import copy_annotations
 
 __all__ = ("transform_ast", "parse")
@@ -80,14 +80,14 @@ class CastElisionTransformer(ast.NodeTransformer):
             case ast.Assign(
                 targets=[left_side],
                 value=ast.Call(func=ast.Name(id=name), args=[_, right_side]),
-            ) if (imported_name := self.scopes.get(name)) and compare_ast(left_side, right_side):
+            ) if (imported_name := self.scopes.get(name)) and compare_asts(left_side, right_side):
                 self.used_at.append((imported_name, name, node.lineno))
                 return None
 
             case ast.Assign(
                 targets=[left_side],
                 value=ast.Call(func=ast.Attribute(value=ast.Name(id=mod_name), attr="cast"), args=[_, right_side]),
-            ) if (imported_name := self.scopes.get(mod_name)) and compare_ast(left_side, right_side):
+            ) if (imported_name := self.scopes.get(mod_name)) and compare_asts(left_side, right_side):
                 self.used_at.append((f"{imported_name}.cast", f"{mod_name}.cast", node.lineno))
                 return None
 

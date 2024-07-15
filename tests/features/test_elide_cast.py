@@ -2,6 +2,7 @@ import ast
 
 from __experimental__._features import elide_cast
 
+
 TEST_INPUT = """\
 from typing import cast as mycast
 

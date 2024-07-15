@@ -1,28 +1,19 @@
 """An implementation of inline import expressions in pure Python."""
 
 import ast
-import sys
 import tokenize
 from collections.abc import Iterable
 from io import BytesIO
-from typing import TYPE_CHECKING
 
-from __experimental__._utils.ast_helpers import collapse_plain_attribute_or_name
-from __experimental__._utils.misc import copy_annotations
-from __experimental__._utils.peekable import Peekable
-from __experimental__._utils.token_helpers import offset_line_horizontal, offset_token_horizontal
+from __experimental__._ast_helpers import collapse_plain_attribute_or_name
+from __experimental__._core import _ExperimentalFeature, _Transformers
+from __experimental__._misc import copy_annotations
+from __experimental__._peekable import Peekable
+from __experimental__._token_helpers import offset_line_horizontal, offset_token_horizontal
+from __experimental__._typing_compat import ReadableBuffer, override
 
-if sys.version_info >= (3, 12):
-    from collections.abc import Buffer as ReadableBuffer
-elif TYPE_CHECKING:
-    from typing_extensions import Buffer as ReadableBuffer
-else:
-    ReadableBuffer = bytes
 
 __all__ = ("transform_tokens", "transform_source", "transform_ast", "parse")
-
-
-# ======== Token modification.
 
 
 def transform_tokens(tokens: Iterable[tokenize.TokenInfo]) -> list[tokenize.TokenInfo]:
@@ -124,12 +115,10 @@ def transform_source(source: str | ReadableBuffer) -> str:
     return tokenize.untokenize(tokens_list).decode(encoding)
 
 
-# ======== AST modification.
-
-
 class InlineImportTransformer(ast.NodeTransformer):
     """An AST transformer that replaces `_IMPORTLIB_MARKER(...)` with `__import__("importlib").import_module(...)`."""
 
+    @override
     def visit_Call(self, node: ast.Call) -> ast.AST:
         """Replace the _IMPORTLIB_MARKER calls with a valid inline import expression."""
 
@@ -190,3 +179,11 @@ def parse(
             feature_version=feature_version,
         )
     )
+
+
+FEATURE = _ExperimentalFeature(
+    "inline_import",
+    "2024.04.04",
+    transformers=_Transformers(transform_source, transform_tokens, transform_ast, parse),
+    reference="https://github.com/ioistired/import-expression-parser",
+)

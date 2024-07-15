@@ -1,79 +1,36 @@
 """An implementation of late-bound function argument defaults (PEP 671) in "pure" Python."""
 
 import ast
-import ctypes
-import sys
 import tokenize
-from collections.abc import Callable, Generator, Iterable
-from functools import partial
+from collections.abc import Generator, Iterable
 from io import BytesIO
-from itertools import takewhile
-from operator import is_not
-from typing import TYPE_CHECKING, TypeGuard, final
+from itertools import starmap
+from typing import TypeGuard, final
 
-from __experimental__._utils.misc import copy_annotations
-from __experimental__._utils.peekable import Peekable
-from __experimental__._utils.token_helpers import offset_line_horizontal
-
-if sys.version_info >= (3, 12):
-    from collections.abc import Buffer as ReadableBuffer
-elif TYPE_CHECKING:
-    from typing_extensions import Buffer as ReadableBuffer
-else:
-    ReadableBuffer = bytes
+from __experimental__._core import _ExperimentalFeature, _Transformers
+from __experimental__._misc import copy_annotations
+from __experimental__._peekable import Peekable
+from __experimental__._token_helpers import offset_line_horizontal
+from __experimental__._typing_compat import ReadableBuffer, override
 
 
 __all__ = ("transform_tokens", "transform_source", "transform_ast", "parse")
 
 
-# ======== The parts that will actually do the work of implementing late binding argument defaults.
-
-
 @final
-class _defer:
-    """A class that holds the functions used for late binding in function signatures."""
+class DEFER_MARKER:
+    __slots__ = ("expr",)
 
-    __slots__ = ("func",)
+    def __init__(self, expr: str, /) -> None:
+        self.expr = expr
 
-    def __init__(self, func: Callable[..., object], /):
-        self.func = func
-
-    def __call__(self, /, *args: object, **kwargs: object) -> object:
-        return self.func(*args, **kwargs)
-
-
-def _evaluate_late_binding(orig_locals: dict[str, object]) -> None:
-    """Does the actual work of evaluating the late bindings and assigning them to the locals."""
-
-    # Evaluate the late-bound function argument defaults (i.e. those with type `_defer`).
-    new_locals = orig_locals.copy()
-    new_locals_values = new_locals.values()  # Micro-optimization.
-
-    for arg_name, arg_val in orig_locals.items():
-        if type(arg_val) is _defer:
-            # Another micro-optimization.
-            # partial(is_not, ...) performs twice as fast as a predefined custom function/lambda.
-            new_locals[arg_name] = arg_val(*takewhile(partial(is_not, arg_val), new_locals_values))
-
-    # Update the locals of the last frame with these new evaluated defaults.
-    frame = sys._getframe(1)
-    try:
-        frame.f_locals.update(new_locals)
-        # To my knowledge, PyPy doesn't support ctypes.pythonapi (or this sort of frame usage, really).
-        # https://doc.pypy.org/en/latest/discussion/ctypes-implementation.html#discussion-and-limitations
-        ctypes.pythonapi.PyFrame_LocalsToFast(ctypes.py_object(frame), ctypes.c_int(0))
-    finally:
-        del frame
+    @override
+    def __repr__(self, /) -> str:
+        return f"{type(self).__name__}({self.expr!r})"
 
 
-# ======== Token modification.
-
-
-def transform_tokens(tokens: Iterable[tokenize.TokenInfo]) -> Generator[tokenize.TokenInfo, None, None]:
-    """Replaces `=>` with `= _DEFER_MARKER` in the token stream.
-
-    Later, the AST transformer step will replace those markers with valid `_defer` objects.
-    """
+def transform_tokens(tokens: Iterable[tokenize.TokenInfo]) -> Generator[tokenize.TokenInfo]:
+    """Replace `=>` with `= _DEFER_MARKER` in the token stream."""
 
     peekable_tokens_iter = Peekable(tokens)
     for tok in peekable_tokens_iter:
@@ -111,15 +68,28 @@ def transform_source(source: str | ReadableBuffer) -> str:
     return tokenize.untokenize(tokens_gen).decode(encoding)
 
 
-# ======== AST modification.
-
-
 class LateBoundDefaultTransformer(ast.NodeTransformer):
-    """An AST transformer that replaces `_DEFER_MARKER(...)` with `_defer(lambda *args, **kwargs: ...)` approximately.
+    """An AST transformer that alters functions with defer markers to use the sentinel idiom for late binding.
 
     Notes
     -----
-    Those lambdas are tailor-constructed with actual individual parameters.
+    The defer markers will be replaced with `DEFER_MARKER` objects that contain a string form of the expression.
+    Meanwhile, the actual expressions will be put in the functions and assigned to the relevant variables, guarded by
+    if conditions checking that the type of the given value is `DEFAULT_MARKER`.
+
+    An example of the conversion::
+
+        # Before
+        def example(a: list[int], b: int = _DEFER_MARKER(len(a))):
+            return [*a, b]
+
+        # After
+        def example(a: list[int], b: int = @DEFER_MARKER("len(a)")):
+            if type(b) is @DEFER_MARKER:
+                b = len(a)
+            return [*a, b]
+
+    "@" is used in the type name to avoid clobbering any user variables.
     """
 
     @staticmethod
@@ -131,82 +101,68 @@ class LateBoundDefaultTransformer(ast.NodeTransformer):
         )
 
     @staticmethod
-    def _replace_marker_node(node: ast.Call, index: int, all_previous_args: list[ast.arg]) -> ast.Call:
-        lambda_arg_names = [arg.arg for arg in all_previous_args[:index]]
-        new_lambda = ast.Lambda(
-            args=ast.arguments(
-                posonlyargs=[],
-                args=[ast.arg(arg=name) for name in lambda_arg_names],
-                kwonlyargs=[],
-                kw_defaults=[],
-                defaults=[],
+    def _replace_marker_node(node: ast.Call, expr: ast.expr) -> ast.Call:
+        node.func = ast.Name("@DEFER_MARKER", ast.Load())
+        node.args = [ast.Constant(ast.unparse(expr))]
+        return node
+
+    @staticmethod
+    def _create_conditional_default(name: str, default: ast.expr) -> ast.If:
+        return ast.If(
+            test=ast.Compare(
+                left=ast.Call(func=ast.Name("type", ast.Load()), args=[ast.Name(name, ast.Load())], keywords=[]),
+                ops=[ast.Is()],
+                comparators=[ast.Name("@DEFER_MARKER", ast.Load())],
             ),
-            body=ast.Tuple(elts=node.args) if len(node.args) > 1 else node.args[0],
+            body=[ast.Assign(targets=[ast.Name(name, ast.Store())], value=default)],
+            orelse=[],
         )
-        return ast.Call(func=ast.Name(id="@defer", ctx=ast.Load()), args=[new_lambda], keywords=[])
 
     @classmethod
     def _replace_late_bound_markers(cls, node: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
-        # Replace the markers in the function defaults with actual defer objects.
-        all_func_defaults = node.args.defaults + node.args.kw_defaults
-        try:
-            next(default for default in all_func_defaults if default is not None and cls._is_marker_node(default))
-        except StopIteration:
-            return
+        set_default_statements: list[tuple[str, ast.expr]] = []
 
-        # Handle args that are allowed to be passed in positionally.
+        # Handle defaults for arguments that can be passed in positionally.
         positional_args = node.args.posonlyargs + node.args.args
-        default_offset = len(positional_args) - len(node.args.defaults)
+        defaults_offset = len(positional_args) - len(node.args.defaults)
 
-        markers_in_defaults = [
-            (index, default) for index, default in enumerate(node.args.defaults) if cls._is_marker_node(default)
-        ]
-        for index, marker in markers_in_defaults:
-            actual_index = index + default_offset
-            node.args.defaults[index] = cls._replace_marker_node(marker, actual_index, positional_args)
+        for index, default in enumerate(node.args.defaults):
+            if cls._is_marker_node(default):
+                arg_index = index + defaults_offset
+                temp_expr = ast.Tuple(elts=default.args) if len(default.args) > 1 else default.args[0]
+                set_default_statements.append((positional_args[arg_index].arg, temp_expr))
+                node.args.defaults[index] = cls._replace_marker_node(default, temp_expr)
 
-        # Handle args that are keyword-only.
-        all_args = positional_args + node.args.kwonlyargs
-        kw_default_offset = len(positional_args)
+        # Handle defaults for keyword-only arguments.
+        for index, kw_default in enumerate(node.args.kw_defaults):
+            if cls._is_marker_node(kw_default):
+                temp_expr = ast.Tuple(elts=kw_default.args) if len(kw_default.args) > 1 else kw_default.args[0]
+                set_default_statements.append((node.args.kwonlyargs[index].arg, temp_expr))
+                node.args.kw_defaults[index] = cls._replace_marker_node(kw_default, temp_expr)
 
-        markers_in_kw_defaults = [
-            (index, kw_default)
-            for index, kw_default in enumerate(node.args.kw_defaults)
-            if cls._is_marker_node(kw_default)
-        ]
+        if set_default_statements:
+            # Add the conditionals for assigning the defaults in the function body, after a docstring if it exists.
+            match node.body:
+                case [ast.Expr(value=ast.Constant(value=str())), *_]:
+                    insert_index = 1
+                case _:
+                    insert_index = 0
 
-        for index, marker in markers_in_kw_defaults:
-            actual_index = index + kw_default_offset
-            node.args.kw_defaults[index] = cls._replace_marker_node(marker, actual_index, all_args)
-
-    @staticmethod
-    def _add_late_binding_evaluate_call(node: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
-        # Put a call to evaluate the defer objects, the late bindings, as the first line of the function.
-        evaluate_expr = ast.Expr(
-            value=ast.Call(
-                func=ast.Name(id="@evaluate_late_binding", ctx=ast.Load()),
-                args=[ast.Call(func=ast.Name(id="locals", ctx=ast.Load()), args=[], keywords=[])],
-                keywords=[],
-            )
-        )
-
-        match node.body:
-            case [ast.Expr(value=ast.Constant(value=str()))]:
-                node.body.insert(1, evaluate_expr)
-            case _:
-                node.body.insert(0, evaluate_expr)
+            node.body[insert_index:insert_index] = starmap(cls._create_conditional_default, set_default_statements)
 
     def _visit_Func(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> ast.AST:
         self._replace_late_bound_markers(node)
-        self._add_late_binding_evaluate_call(node)
         return self.generic_visit(node)
 
+    @override
     def visit_FunctionDef(self, node: ast.FunctionDef) -> ast.AST:
         return self._visit_Func(node)
 
+    @override
     def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> ast.AST:
         return self._visit_Func(node)
 
+    @override
     def visit_Module(self, node: ast.Module) -> ast.AST:
         """Import the defer type and evaluation function so that the late binding-related symbols are valid."""
 
@@ -223,7 +179,7 @@ class LateBoundDefaultTransformer(ast.NodeTransformer):
 
             position += 1
 
-        aliases = [ast.alias("_defer", "@defer"), ast.alias("_evaluate_late_binding", "@evaluate_late_binding")]
+        aliases = [ast.alias("DEFER_MARKER", "@DEFER_MARKER")]
         imports = ast.ImportFrom(module="__experimental__._features.late_bound_arg_defaults", names=aliases, level=0)
         node.body.insert(position, imports)
 
@@ -231,8 +187,8 @@ class LateBoundDefaultTransformer(ast.NodeTransformer):
 
 
 def transform_ast(tree: ast.AST) -> ast.Module:
-    """Walk through an AST and fix it to turn the `_DEFER_MARKER(...)` expressions into `_defer` instantiations, as
-    well as import `_defer` and `_evaluate_late_binding()` to place where appropriate.
+    """Walk through an AST to a) turn the `_DEFER_MARKER(...)` expressions into `DEFER_MARKER` instantiations,
+    b) move the late-bound default expressions into their functions, and c) import `DEFER_MARKER`.
     """
 
     return ast.fix_missing_locations(LateBoundDefaultTransformer().visit(tree))
@@ -265,3 +221,11 @@ def parse(
             feature_version=feature_version,
         )
     )
+
+
+FEATURE = _ExperimentalFeature(
+    "late_bound_arg_defaults",
+    "2024.03.30",
+    transformers=_Transformers(transform_source, transform_tokens, transform_ast, parse),
+    reference="https://peps.python.org/pep-0671/",
+)

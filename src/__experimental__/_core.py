@@ -1,6 +1,5 @@
 """The main residence of the feature objects and overarching import logic.
 
-TODO: Consider making the features even more plugin-like.
 TODO: Figure out how to do one pass instead of multiple for the token and AST transformations.
     See pyupgrade for inspiration.
 TODO: Switch to working on a list of tokens instead of a generator. That'll remove some complexity and allow bigger
@@ -19,18 +18,12 @@ from importlib._bootstrap import _call_with_frames_removed  # type: ignore # Has
 from io import BytesIO
 from typing import TYPE_CHECKING, ClassVar, TypeAlias
 
-from __experimental__._features import (
-    elide_cast as _elide_cast,
-    inline_import as _inline_import,
-    late_bound_arg_defaults as _late_bound_arg_defaults,
-    lazy_import as _lazy_import,
-)
-from __experimental__._utils.token_helpers import get_imported_experimental_flags
+from __experimental__._token_helpers import get_imported_experimental_flags
+from __experimental__._typing_compat import ReadableBuffer, Self, override
+
 
 if TYPE_CHECKING:
-    from typing import Protocol, TypeVar
-
-    from typing_extensions import Buffer as ReadableBuffer, ParamSpec, Self
+    from typing import ParamSpec, Protocol, TypeVar
 
     T = TypeVar("T")
     P = ParamSpec("P")
@@ -40,12 +33,6 @@ if TYPE_CHECKING:
 
     # Hack to inform type-checker of annotations.
     _call_with_frames_removed: _CurryProtocol = _call_with_frames_removed  # noqa: PLW0127
-else:
-
-    class Self:
-        pass
-
-    ReadableBuffer = bytes
 
 
 # Copied from _typeshed - this and ReadableBuffer were marked as stable.
@@ -63,7 +50,7 @@ class _Transformers:
         token_hook: Callable[[Iterable[tokenize.TokenInfo]], Iterable[tokenize.TokenInfo]] | None = None,
         ast_hook: Callable[[CompilableAST], CompilableAST] | None = None,
         parse: Callable[..., ast.Module] | None = None,
-    ):
+    ) -> None:
         self.source_hook = source_hook
         self.token_hook = token_hook
         self.ast_hook = ast_hook
@@ -89,65 +76,24 @@ class _ExperimentalFeature:
 
     _registry: ClassVar[dict[str, Self]] = {}
 
-    def __init__(self, name: str, date_added: str, *, transformers: _Transformers, reference: str | None = None):
+    def __init__(
+        self,
+        name: str,
+        date_added: str,
+        *,
+        transformers: _Transformers,
+        reference: str | None = None,
+    ) -> None:
         self.name: str = name
         self.date_added: str = date_added
         self.transformers: _Transformers = transformers
         self.reference: str | None = reference
         self._registry[name] = self
 
+    @override
     def __repr__(self) -> str:
         maybe_ref = f", reference={self.reference}" if self.reference else ""
         return f"_ExperimentalFeature(name={self.name}, date_added={self.date_added}{maybe_ref})"
-
-
-late_bound_arg_defaults = _ExperimentalFeature(
-    "late_bound_arg_defaults",
-    "2024.03.30",
-    transformers=_Transformers(
-        _late_bound_arg_defaults.transform_source,
-        _late_bound_arg_defaults.transform_tokens,
-        _late_bound_arg_defaults.transform_ast,
-        _late_bound_arg_defaults.parse,
-    ),
-    reference="https://peps.python.org/pep-0671/",
-)
-
-inline_import = _ExperimentalFeature(
-    "inline_import",
-    "2024.04.04",
-    transformers=_Transformers(
-        _inline_import.transform_source,
-        _inline_import.transform_tokens,
-        _inline_import.transform_ast,
-        _inline_import.parse,
-    ),
-    reference="https://github.com/ioistired/import-expression-parser",
-)
-
-lazy_import = _ExperimentalFeature(
-    "lazy_import",
-    "2024.04.10",
-    transformers=_Transformers(
-        None,
-        None,
-        _lazy_import.transform_ast,
-        _lazy_import.parse,
-    ),
-    reference="https://peps.python.org/pep-0690/",
-)
-
-elide_cast = _ExperimentalFeature(
-    "elide_cast",
-    "2024.05.03",
-    transformers=_Transformers(
-        None,
-        None,
-        _elide_cast.transform_ast,
-        _elide_cast.parse,
-    ),
-    reference="Discussions about the runtime cost of typing.cast.",
-)
 
 
 class _ExperimentalLoader(importlib.machinery.SourceFileLoader):
@@ -161,9 +107,9 @@ class _ExperimentalLoader(importlib.machinery.SourceFileLoader):
     ) -> types.CodeType:
         source = importlib.util.decode_source(data)
 
-        # Check if the code imports anything from __experimental__ and collect imported features.
-        collected_flags: set[str] = get_imported_experimental_flags(source)
-        features_to_activate: tuple[_ExperimentalFeature, ...] = tuple(
+        # Get the feature names that the code imports from __experimental__.
+        collected_flags = get_imported_experimental_flags(source)
+        features_to_activate = tuple(
             _ExperimentalFeature._registry[flag]
             for flag in collected_flags.intersection(_ExperimentalFeature._registry.keys())
         )
@@ -172,7 +118,7 @@ class _ExperimentalLoader(importlib.machinery.SourceFileLoader):
         if not features_to_activate:
             return _call_with_frames_removed(compile, data, path, "exec", dont_inherit=True, optimize=_optimize)
 
-        # Apply relevant token transformations.
+        # Apply token transformations.
         tokens = tokenize.tokenize(BytesIO(data).readline)
 
         for feature in features_to_activate:
@@ -182,8 +128,8 @@ class _ExperimentalLoader(importlib.machinery.SourceFileLoader):
         # The source should be syntactically valid now as far as we're concerned.
         source = tokenize.untokenize(tokens)
 
-        # Apply relevant AST transformations.
-        tree: CompilableAST = _call_with_frames_removed(ast.parse, source, path, "exec")
+        # Apply AST transformations.
+        tree = _call_with_frames_removed(ast.parse, source, path, "exec")
 
         for feature in features_to_activate:
             if feature.transformers.ast_hook:

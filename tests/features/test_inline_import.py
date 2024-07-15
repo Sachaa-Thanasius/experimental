@@ -5,7 +5,8 @@ from typing import TYPE_CHECKING, Any
 import pytest
 from __experimental__._features import inline_import
 
-# Many of these tests are modified from import_expression.
+
+# TODO: Fix missing import_expression behavior. See latest commits for it.
 
 
 @pytest.mark.parametrize(

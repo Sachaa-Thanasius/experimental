@@ -7,10 +7,11 @@ import pathlib
 import types
 from typing import Any
 
-from __experimental__._base import _ExperimentalLoader
+from __experimental__._core import _ExperimentalLoader
 from __experimental__._features import late_bound_arg_defaults as late_bind
 
-# FIXME: Make tests more comprehensive.
+
+# TODO: Make tests more comprehensive.
 
 
 original_source = """\
@@ -44,25 +45,6 @@ def test_func(
 """
 
 
-def test_late_binding_logic():
-    def late_binding_logic_example(
-        a: int,
-        b: float = 1.0,
-        /,
-        ex: str = "hello",
-        *,
-        c: list[object] = late_bind._defer(lambda a, b, ex: ["Preceding args", a, b, ex]),  # type: ignore # noqa: B008
-        d: bool = False,
-        e: int = late_bind._defer(lambda a, b, ex, c, d: len(c)),  # type: ignore
-    ) -> tuple[list[object], int]:
-        late_bind._evaluate_late_binding(locals())
-        return c, e
-
-    c, e = late_binding_logic_example(10)
-    assert c == ["Preceding args", 10, 1.0, "hello"]
-    assert e == 4
-
-
 def test_transform_source():
     retokenized_source = late_bind.transform_source(original_source)
     assert retokenized_source == post_retokenize_source
@@ -78,8 +60,8 @@ def test_transform_ast():
     test_func = globals_["test_func"]
 
     assert test_func.__defaults__[0] == 1
-    assert isinstance(test_func.__defaults__[1], late_bind._defer)
-    assert isinstance(test_func.__defaults__[2], late_bind._defer)
+    assert isinstance(test_func.__defaults__[1], late_bind.DEFER_MARKER)
+    assert isinstance(test_func.__defaults__[2], late_bind.DEFER_MARKER)
 
 
 def test_transform_ast_with_docstring():

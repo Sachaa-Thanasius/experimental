@@ -1,3 +1,4 @@
+# region License
 # This code is copied from https://github.com/mikeshardmind/discord-rolebot/blob/main/rolebot/encoder.py
 # which is available under the MPL License below:
 #
@@ -6,10 +7,12 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #
 # Copyright (C) 2023 Michael Hall <https://github.com/mikeshardmind>
+# endregion
 
 from collections import deque
 from collections.abc import Iterable
 from typing import Generic, TypeVar
+
 
 T = TypeVar("T")
 
@@ -17,7 +20,7 @@ __all__ = ("Peekable",)
 
 
 class Peekable(Generic[T]):
-    def __init__(self, iterable: Iterable[T]):
+    def __init__(self, iterable: Iterable[T]) -> None:
         self._it = iter(iterable)
         self._cache: deque[T] = deque()
 

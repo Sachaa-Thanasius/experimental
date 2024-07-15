@@ -8,9 +8,11 @@ import importlib.util
 import sys
 import types
 from collections.abc import Generator, Sequence
-from typing import Any
 
-from __experimental__._utils.misc import copy_annotations
+from __experimental__._core import _ExperimentalFeature, _Transformers
+from __experimental__._misc import copy_annotations
+from __experimental__._typing_compat import override
+
 
 __all__ = ("lazy_module_import", "transform_ast", "parse")
 
@@ -21,6 +23,7 @@ class _LazyFinder(importlib.abc.MetaPathFinder):
     It currently wraps the actual loader with `importlib.util.LazyLoader`.
     """
 
+    @override
     def find_spec(
         self,
         fullname: str,
@@ -71,13 +74,13 @@ def uninstall_lazy_import_hook() -> None:
 
 
 @contextlib.contextmanager
-def lazy_module_import() -> Generator[None, Any, None]:
+def lazy_module_import() -> Generator[None]:
     """A context manager that causes imports occuring within it to occur lazily.
 
     Notes
     -----
-    Implementation details: It adds a special finder to `sys.meta_path` and then removes it. That finder wraps the
-    loaders of imported modules with `importlib.util.LazyLoader`.
+    This adds a special finder to `sys.meta_path` and then removes it. That finder wraps the loaders of imported
+    modules with `importlib.util.LazyLoader`.
     """
 
     install_lazy_import_hook()
@@ -99,6 +102,7 @@ class LazyImportTransformer(ast.NodeTransformer):
     __experimental__ imports.
     """
 
+    @override
     def visit_Module(self, node: ast.Module) -> ast.AST:
         expect_docstring = True
         position = 0
@@ -163,3 +167,11 @@ def parse(
             feature_version=feature_version,
         ),
     )
+
+
+FEATURE = _ExperimentalFeature(
+    "lazy_import",
+    "2024.04.10",
+    transformers=_Transformers(None, None, transform_ast, parse),
+    reference="https://peps.python.org/pep-0690/",
+)

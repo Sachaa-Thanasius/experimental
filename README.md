@@ -78,3 +78,4 @@ It's fun. It's also a learning experience in manipulating Python via import hook
 - asottile's future packages, including things like [future-fstrings](https://github.com/asottile-archive/future-fstrings), that are practical applications showcasing the usefulness of these kinds of transformations ("memes" though they may be).
 - RocketRace's [hoopy](https://github.com/RocketRace/hoopy) and [custom-literals](https://github.com/RocketRace/custom-literals) packages, which are much more interesting, complex, and featured Python manipulations.
 - Those who wrote the original PEPs and packages that this attempts to (re)implement (see the links in the overview).
+- Addendum: aroberge had the idea (and the code) for an `__experimental__` package well before I did, but I didn't know until well after making this.

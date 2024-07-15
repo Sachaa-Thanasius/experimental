@@ -1,13 +1,13 @@
 import importlib.util
 import pathlib
 import sys
-import time
 
 import pytest
-from __experimental__._base import _ExperimentalLoader
+from __experimental__._core import _ExperimentalLoader
 from __experimental__._features import lazy_import
 
-# FIXME: Make tests more comprehensive.
+
+# TODO: Make tests more comprehensive.
 
 
 def test_finder_present_only_in_with_block():

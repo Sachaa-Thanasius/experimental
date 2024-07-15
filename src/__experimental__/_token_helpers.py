@@ -1,3 +1,4 @@
+# region License
 # The code up to but not including get_imported_experimental_flags() is mostly
 # modified from https://github.com/asottile/reorder-python-imports/blob/main/reorder_python_imports.py
 # which is available under the MIT License below:
@@ -21,12 +22,14 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
+# endregion
 
 import enum
 import keyword
 import re
 import tokenize
 from collections.abc import Generator, Iterable
+
 
 __all__ = ("get_imported_experimental_flags", "offset_token_horizontal", "offset_line_horizontal")
 
@@ -106,7 +109,7 @@ def offset_line_horizontal(
     tokens: Iterable[tokenize.TokenInfo],
     line: int,
     offset: int,
-) -> Generator[tokenize.TokenInfo, None, None]:
+) -> Generator[tokenize.TokenInfo]:
     """Takes a iterable of tokens and offsets the tokens horizontally if they are on the given line.
 
     The last token returned might not be on the same line.

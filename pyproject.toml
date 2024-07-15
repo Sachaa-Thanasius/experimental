@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 name = "experimental"
 description = "Code transformations activated via `from __experimental__` imports."
 requires-python = ">=3.10"
-version = "2024.05.08"
+version = "2024.07.15"
 readme = "README.md"
 license = "MIT"
 authors = [
@@ -25,6 +25,9 @@ classifiers = [
     "Topic :: Utilities",
     "Typing :: Typed",
 ]
+
+[project.optional-dependencies]
+dev = ["coverage", "covdefaults", "pytest", "typing-extensions"]
 
 [project.urls]
 Documentation = "https://github.com/Sachaa-Thanasius/experimental#readme"
@@ -46,40 +49,41 @@ else:
     __experimental__.install_experimental_import_hook()
 """
 
-# ======== Testing-related config.
 
-[tool.hatch.envs.tests]
-dependencies = ["coverage[toml]>=6.5", "covdefaults", "pytest"]
+# ---- Testing config
 
-[tool.hatch.envs.tests.scripts]
-test = "pytest {args:tests}"
-test-cov = "coverage run -m pytest {args:tests}"
-cov-report = ["- coverage combine", "coverage report"]
-cov = ["test-cov", "cov-report"]
-
-[[tool.hatch.envs.tests.matrix]]
+[[tool.hatch.envs.hatch-test.matrix]]
 python = ["3.10", "3.11", "3.12"]
+
+[tool.hatch.envs.hatch-test]
+extra-dependencies = ["covdefaults"]
 
 [tool.pytest.ini_options]
 pythonpath = "src"
-addopts = ["--import-mode=importlib"]
+addopts = ["--import-mode=importlib", "--strict-markers", "--strict-config"]
+
+[tool.coverage.run]
+plugins = ["covdefaults"]
+source = ["__experimental__", "tests"]
+omit = ["tests/sample_late_bound_arg.py"]
+
+[tool.coverage.paths]
+__experimental__ = ["src"]
 
 [tool.coverage.report]
 # It's a work in progress.
 fail_under = 70
+exclude_lines = ["^\\s*(?:el)?if TYPE_CHECKING:$"]
 
-[tool.coverage.run]
-plugins = ["covdefaults"]
-omit = ["tests/sample_late_bound_arg.py"]
-
-# ======== Linting-related config.
+# ---- Linting config
 
 [tool.ruff]
-include = ["src/__experimental__/*"]
+include = ["src/__experimental__/**/*.py"]
 line-length = 120
 target-version = "py310"
 
 [tool.ruff.lint]
+typing-modules = ["src/__experimental__/_typing_compat.py"]
 select = [
     "F",
     "E",
@@ -113,25 +117,29 @@ select = [
     "RUF",
 ]
 ignore = [
-    "S101",   # Use of assert here is a known quantity.
+    "S101",   # Use of assert here is a known quantity for typing cases. All uses should be safe to optimize out.
     "SIM105", # Suppressable exception. contextlib.suppress is a stylistic choice with overhead.
-    "C90",    # McCabe complexity memes.
-    "ANN101", # Type of self is usually implicit.
-    "ANN102", # Type of cls is usually implicit.
-    "ANN204", # Special method return types are usually implicit or known by type checker.
-    "ANN401", # Need Any for some cases.
-    "A002",   # A little built-in shadowing.
-    "ERA001", # Ignore commented code for now.
+    "C90",    # McCabe complexity.
+    "ANN101", # Type of Self for self is usually implicit and/or known by the type-checker.
+    "ANN102", # Type of type[Self] for cls is usually implicit and/or known by the type-checker.
+    "ANN204", # Special method return types are usually implicit and/or known by type checker.
+    "ANN401", # Any is needed for some parameters.
+    "UP038",  # isinstance performs better with tuples than unions.
+    "PT001",  # pytest recommends against empty parentheses on pytest.fixture.
+    "PYI036", # Bug with annotations for __exit__.
+    "PD011",  # Erroneous issue that triggers for any .values attribute access at all.
     # Recommended by Ruff when using Ruff format.
     "E111",
     "E114",
     "E117",
-    "Q003",
     "COM812",
     "COM819",
     "E501",
     "ISC001",
     "ISC002",
+    # -- Project-specific rules.
+    "A002",   # A little built-in shadowing.
+    "ERA001", # Ignore commented code for now.
 ]
 unfixable = [
     "ERA", # I don't want anything erroneously detected deleted by this.
@@ -156,22 +164,30 @@ unfixable = [
 ]
 
 [tool.ruff.lint.isort]
+lines-after-imports = 2
 combine-as-imports = true
 
 [tool.ruff.lint.pyupgrade]
 keep-runtime-typing = true
 
-# ======== Type checking-related config.
+
+# ---- Type-checking config
 
 [tool.pyright]
 include = ["src/__experimental__"]
 ignore = ["tests/test_utils.py"]
 pythonVersion = "3.10"
+pythonPlatform = "All"
 typeCheckingMode = "strict"
 
-reportPrivateUsage = "none"
-reportUnusedFunction = "none"
-reportMissingTypeStubs = "warning"
-reportImportCycles = "warning"
-reportPropertyTypeMismatch = "warning"
+defineConstant = { "TYPING" = true }
+
+reportPrivateUsage = "none"                    # We're the package; of course we're accessing internals.
+reportUnnecessaryIsInstance = "none"           # We should account for garbage input from users.
+reportUninitializedInstanceVariable = "none"   # Nice as an infrequent checkup, but usually noisy.
+reportCallInDefaultInitializer = "warning"
+reportImplicitOverride = "warning"
+reportImportCycles = "warning"                 # Nice as an infrequent checkup, but "if TYPE_CHECKING" causes false positives.
+reportPropertyTypeMismatch = "error"
+reportShadowedImports = "error"
 reportUnnecessaryTypeIgnoreComment = "warning"

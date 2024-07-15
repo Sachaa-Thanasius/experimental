@@ -2,7 +2,7 @@
 
 from collections.abc import Callable
 
-from __experimental__._features.late_bound_arg_defaults import _defer, _evaluate_late_binding
+from __experimental__._features.late_bound_arg_defaults import DEFER_MARKER
 
 # ======== We'll be benchmarking the desugared version of this:
 
@@ -26,11 +26,15 @@ def example_called(
     /,
     ex: str = "hello",
     *,
-    c: list[object] = _defer(lambda a, b, ex: ["Preceding args", a, b, ex]),  # type: ignore # noqa: B008
+    c: list[object] = DEFER_MARKER('["Preceding args", a, b, ex]'),  # type: ignore # noqa: B008
     d: bool = False,
-    e: int = _defer(lambda a, b, ex, c, d: len(c)),  # type: ignore
+    e: int = DEFER_MARKER("len(c)"),  # type: ignore
 ) -> tuple[list[object], int]:
-    _evaluate_late_binding(locals())
+    if type(c) is DEFER_MARKER:
+        c = ["Preceding args", a, b, ex]
+    if type(e) is DEFER_MARKER:
+        e = len(c)
+
     return c, e
 
 
@@ -48,6 +52,7 @@ def example_none_idiom(
         c = ["Preceding args", a, b, ex]
     if e is None:
         e = len(c)
+
     return c, e
 
 
@@ -104,15 +109,6 @@ def main() -> None:
     if args.benchmark:
         print("============ Timing ============")
         run_timer(iterations)
-
-        # TODO: See if there's a way to make late_bound_arg_defaults faster somehow while using "pure" Python
-        # because 20x slower is terrible.
-        # e.g.
-        #
-        # Iterations = 1,000,000
-        # ============ Timing ============
-        # With call:                2.823724805988604
-        # With None sentinel idiom: 0.14172109999344684
 
     if args.profile:
         print("============ Profiling ============")

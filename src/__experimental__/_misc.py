@@ -1,6 +1,7 @@
 from collections.abc import Callable
 from typing import ParamSpec, TypeVar
 
+
 T = TypeVar("T")
 P = ParamSpec("P")
 

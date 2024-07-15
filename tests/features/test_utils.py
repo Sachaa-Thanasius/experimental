@@ -5,13 +5,10 @@ from __experimental__._ast_helpers import collapse_plain_attribute_or_name, comp
 from __experimental__._token_helpers import get_imported_experimental_flags
 
 
-empty_set: set[str] = set()
-
-
 @pytest.mark.parametrize(
     ("test_source", "expected_result"),
     [
-        pytest.param("", empty_set, id="trivial"),
+        pytest.param("", set[str](), id="trivial"),
         pytest.param(
             "from __experimental__ import inline_import\n",
             {"inline_import"},
@@ -60,12 +57,12 @@ empty_set: set[str] = set()
         ),
         pytest.param(
             "import a\n\ndef hello_world() -> None: pass\n\nfrom __experimental__ import inline_import",
-            empty_set,
+            set[str](),
             id="stops at first function",
         ),
         pytest.param(
             "import a\n\nclass Hello: pass\n\nfrom __experimental__ import inline_import",
-            empty_set,
+            set[str](),
             id="stops at first class",
         ),
     ],

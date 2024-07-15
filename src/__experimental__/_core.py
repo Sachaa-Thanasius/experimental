@@ -1,9 +1,9 @@
 """The main residence of the feature objects and overarching import logic.
 
 TODO: Figure out how to do one pass instead of multiple for the token and AST transformations.
-    See pyupgrade for inspiration.
+See pyupgrade for inspiration.
 TODO: Switch to working on a list of tokens instead of a generator. That'll remove some complexity and allow bigger
-    transformations.
+transformations.
 """
 
 import ast
@@ -39,6 +39,10 @@ if TYPE_CHECKING:
 StrPath: TypeAlias = str | os.PathLike[str]
 
 CompilableAST: TypeAlias = ast.Module | ast.Expression | ast.Interactive
+TokenStream: TypeAlias = Iterable[tokenize.TokenInfo]
+
+
+__all__ = ("install_experimental_import_hook", "uninstall_experimental_import_hook")
 
 
 class _Transformers:
@@ -47,7 +51,7 @@ class _Transformers:
     def __init__(
         self,
         source_hook: Callable[[str], str] | None = None,
-        token_hook: Callable[[Iterable[tokenize.TokenInfo]], Iterable[tokenize.TokenInfo]] | None = None,
+        token_hook: Callable[[TokenStream], TokenStream] | None = None,
         ast_hook: Callable[[CompilableAST], CompilableAST] | None = None,
         parse: Callable[..., ast.Module] | None = None,
     ) -> None:
@@ -58,7 +62,7 @@ class _Transformers:
 
 
 class _ExperimentalFeature:
-    """A feature class that attempts to emulate `__future__._Feature` to some degree.
+    """A class that attempts to emulate `__future__._Feature` to some degree, with metadata about package features.
 
     Attributes
     ----------
@@ -92,8 +96,8 @@ class _ExperimentalFeature:
 
     @override
     def __repr__(self) -> str:
-        maybe_ref = f", reference={self.reference}" if self.reference else ""
-        return f"_ExperimentalFeature(name={self.name}, date_added={self.date_added}{maybe_ref})"
+        maybe_ref = f", reference={self.reference!r}" if self.reference else ""
+        return f"_ExperimentalFeature(name={self.name!r}, date_added={self.date_added!r}{maybe_ref})"
 
 
 class _ExperimentalLoader(importlib.machinery.SourceFileLoader):
@@ -161,3 +165,15 @@ def uninstall_experimental_import_hook() -> None:
         if "FileFinder.path_hook" in hook.__qualname__ and hasattr(hook, "_original_path_hook_for_FileFinder"):
             sys.path_hooks[i] = hook._original_path_hook_for_FileFinder  # type: ignore # Runtime attribute access.
             break
+
+
+def _import_features() -> None:
+    import pkgutil
+
+    from __experimental__ import _features
+
+    for _, mod_name, _ in pkgutil.walk_packages(_features.__path__, f"{_features.__name__}."):
+        importlib.import_module(mod_name)
+
+
+_import_features()

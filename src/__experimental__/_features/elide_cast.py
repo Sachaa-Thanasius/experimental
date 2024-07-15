@@ -10,7 +10,7 @@ from __experimental__._misc import copy_annotations
 from __experimental__._typing_compat import override
 
 
-__all__ = ("transform_ast", "parse")
+__all__ = ("transform_ast", "parse", "FEATURE")
 
 
 class CastElisionTransformer(ast.NodeTransformer):

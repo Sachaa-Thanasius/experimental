@@ -1,11 +1,9 @@
 import __future__
 
 import ast
-import importlib
 import importlib.util
 import pathlib
 import types
-from typing import Any
 
 from __experimental__._core import _ExperimentalLoader
 from __experimental__._features import late_bound_arg_defaults as late_bind
@@ -51,14 +49,16 @@ def test_transform_source():
 
 
 def test_transform_ast():
-    globals_: dict[str, Any] = {}
+    globals_ns: dict[str, object] = {}
 
     tree = late_bind.transform_ast(ast.parse(post_retokenize_source))
     code = compile(tree, "<string>", "exec")
-    exec(code, globals_)
+    exec(code, globals_ns)
 
-    test_func = globals_["test_func"]
+    test_func = globals_ns["test_func"]
 
+    assert isinstance(test_func, types.FunctionType)
+    assert isinstance(test_func.__defaults__, tuple)
     assert test_func.__defaults__[0] == 1
     assert isinstance(test_func.__defaults__[1], late_bind.DEFER_MARKER)
     assert isinstance(test_func.__defaults__[2], late_bind.DEFER_MARKER)
@@ -66,14 +66,14 @@ def test_transform_ast():
 
 def test_transform_ast_with_docstring():
     original_source = f'"""Module level docstring"""\n{post_retokenize_source}'
-    globals_: dict[str, Any] = {}
+    globals_ns: dict[str, object] = {}
 
     tree = late_bind.transform_ast(ast.parse(original_source))
     code = compile(tree, "<string>", "exec")
-    exec(code, globals_)
+    exec(code, globals_ns)
 
-    module_doc = globals_["__doc__"]
-    test_func = globals_["test_func"]
+    module_doc = globals_ns["__doc__"]
+    test_func = globals_ns["test_func"]
 
     assert module_doc == "Module level docstring"
     assert isinstance(test_func, types.FunctionType)
@@ -82,14 +82,14 @@ def test_transform_ast_with_docstring():
 def test_transform_ast_with_future_import():
     original_source = f"from __future__ import annotations\n{post_retokenize_source}"
 
-    globals_: dict[str, Any] = {}
+    globals_ns: dict[str, object] = {}
 
     tree = late_bind.transform_ast(ast.parse(original_source))
     code = compile(tree, "<string>", "exec")
-    exec(code, globals_)
+    exec(code, globals_ns)
 
-    anns = globals_["annotations"]
-    test_func = globals_["test_func"]
+    anns = globals_ns["annotations"]
+    test_func = globals_ns["test_func"]
 
     assert anns == __future__.annotations
     assert isinstance(test_func, types.FunctionType)
@@ -98,15 +98,15 @@ def test_transform_ast_with_future_import():
 def test_transform_ast_with_docstring_and_future_import():
     original_source = f'"""Module level docstring"""\nfrom __future__ import annotations\n{post_retokenize_source}'
 
-    globals_: dict[str, Any] = {}
+    globals_ns: dict[str, object] = {}
 
     tree = late_bind.transform_ast(ast.parse(original_source))
     code = compile(tree, "<string>", "exec")
-    exec(code, globals_)
+    exec(code, globals_ns)
 
-    module_doc = globals_["__doc__"]
-    anns = globals_["annotations"]
-    test_func = globals_["test_func"]
+    module_doc = globals_ns["__doc__"]
+    anns = globals_ns["annotations"]
+    test_func = globals_ns["test_func"]
 
     assert module_doc == "Module level docstring"
     assert anns == __future__.annotations

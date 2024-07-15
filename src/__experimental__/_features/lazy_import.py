@@ -14,7 +14,7 @@ from __experimental__._misc import copy_annotations
 from __experimental__._typing_compat import override
 
 
-__all__ = ("lazy_module_import", "transform_ast", "parse")
+__all__ = ("lazy_module_import", "transform_ast", "parse", "FEATURE")
 
 
 class _LazyFinder(importlib.abc.MetaPathFinder):

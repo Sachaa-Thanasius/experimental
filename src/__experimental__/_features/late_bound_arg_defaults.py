@@ -14,7 +14,7 @@ from __experimental__._token_helpers import offset_line_horizontal
 from __experimental__._typing_compat import ReadableBuffer, override
 
 
-__all__ = ("transform_tokens", "transform_source", "transform_ast", "parse")
+__all__ = ("transform_tokens", "transform_source", "transform_ast", "parse", "FEATURE")
 
 
 @final

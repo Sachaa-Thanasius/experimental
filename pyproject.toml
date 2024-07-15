@@ -20,7 +20,6 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
-    "Programming Language :: Python :: Implementation :: CPython",
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Topic :: Utilities",
     "Typing :: Typed",
@@ -60,7 +59,7 @@ extra-dependencies = ["covdefaults"]
 
 [tool.pytest.ini_options]
 pythonpath = "src"
-addopts = ["--import-mode=importlib", "--strict-markers", "--strict-config"]
+addopts = ["--strict-markers", "--strict-config"] # "--import-mode=importlib", 
 
 [tool.coverage.run]
 plugins = ["covdefaults"]

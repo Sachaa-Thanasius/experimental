@@ -82,8 +82,8 @@ def test_get_imported_experimental_flags(test_source: str, expected_result: set[
 )
 def test_collapse_plain_attribute_or_name(test_source: str, expected_result: str):
     tree = ast.parse(test_source)
-    node = tree.body[0].value
-    assert collapse_plain_attribute_or_name(node) == expected_result
+    node = tree.body[0].value  # pyright: ignore
+    assert collapse_plain_attribute_or_name(node) == expected_result  # pyright: ignore
 
 
 @pytest.mark.parametrize(
@@ -97,9 +97,9 @@ def test_collapse_plain_attribute_or_name(test_source: str, expected_result: str
 )
 def test_collapse_plain_attribute_or_name_bad_input(test_source: str):
     tree = ast.parse(test_source)
-    node = tree.body[0].value
+    node = tree.body[0].value  # pyright: ignore
     with pytest.raises(TypeError):
-        collapse_plain_attribute_or_name(node)
+        collapse_plain_attribute_or_name(node)  # pyright: ignore
 
 
 @pytest.mark.parametrize(
@@ -115,6 +115,6 @@ def test_collapse_plain_attribute_or_name_bad_input(test_source: str):
 )
 def test_compare_ast(test_source: str, expected_result: bool):
     tree = ast.parse(test_source)
-    left_side = tree.body[0].targets[0]
-    first_arg = tree.body[0].value.args[0]
-    assert compare_asts(left_side, first_arg) == expected_result
+    left_side = tree.body[0].targets[0]  # pyright: ignore
+    first_arg = tree.body[0].value.args[0]  # pyright: ignore
+    assert compare_asts(left_side, first_arg) == expected_result  # pyright: ignore

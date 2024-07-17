@@ -177,8 +177,7 @@ keep-runtime-typing = true
 # ---- Type-checking config
 
 [tool.pyright]
-include = ["src/__experimental__"]
-ignore = ["tests/test_utils.py"]
+include = ["src/__experimental__", "tests"]
 pythonVersion = "3.10"
 pythonPlatform = "All"
 typeCheckingMode = "strict"

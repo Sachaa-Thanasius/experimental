@@ -97,10 +97,10 @@ class InlineImportTransformer(ast.NodeTransformer):
         """Replace the _IMPORTLIB_MARKER calls with a valid inline import expression."""
 
         match node:
-            case ast.Call(func=ast.Name(id="_IMPORTLIB_MARKER"), args=[(ast.Attribute() | ast.Name()) as arg]):
+            case ast.Call(func=ast.Name("_IMPORTLIB_MARKER"), args=[(ast.Attribute() | ast.Name()) as arg]):
                 node.func = ast.Attribute(
                     value=ast.Call(
-                        func=ast.Name(id="__import__", ctx=ast.Load()),
+                        func=ast.Name("__import__", ctx=ast.Load()),
                         args=[ast.Constant(value="importlib")],
                         keywords=[],
                     ),

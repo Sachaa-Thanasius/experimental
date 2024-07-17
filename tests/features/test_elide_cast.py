@@ -66,7 +66,7 @@ def test_cast_tracking():
         ("typing.cast", "tp.cast", 21),
     ]
 
-    transformer = elide_cast.CastElisionTransformer()
+    transformer = elide_cast.TypingCastElider()
     transformer.visit(ast.parse(TEST_INPUT))
     assert transformer.used_at == expected
 

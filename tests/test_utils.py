@@ -2,7 +2,7 @@ import ast
 
 import pytest
 from __experimental__._ast_helpers import collapse_plain_attribute_or_name, compare_asts
-from __experimental__._token_helpers import get_imported_experimental_flags
+from __experimental__._misc import get_imported_experimental_flags
 
 
 @pytest.mark.parametrize(

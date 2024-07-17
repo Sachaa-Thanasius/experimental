@@ -1,15 +1,17 @@
 # pyright: reportUnsupportedDunderAll=none
-"""Package for custom code transformations."""
+"""A handful of custom code transformations."""
 
 __all__ = (
+    # Not features
     "all_feature_names",
+    "install_experimental_import_hook",
+    "uninstall_experimental_import_hook",
+    # Features
     "elide_cast",
     "inline_import",
     "late_bound_arg_defaults",
     "lazy_import",
     "lazy_module_import",
-    "install_experimental_import_hook",
-    "uninstall_experimental_import_hook",
 )
 
 
@@ -19,6 +21,7 @@ from __experimental__._core import (
 )
 
 
+# Keep __all__ and this in sync.
 all_feature_names = (
     "elide_cast",
     "inline_import",

@@ -1,12 +1,9 @@
 import ipaddress
 import urllib.parse
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Annotated
 
 import pytest
 from __experimental__._features import inline_import
-
-
-# TODO: Fix missing import_expression behavior. See latest commits for it.
 
 
 @pytest.mark.parametrize(
@@ -33,7 +30,7 @@ def test_transform_source(test_source: str, expected_result: str):
         ("urllib.parse!.quote('?')", urllib.parse.quote("?")),
     ],
 )
-def test_parse(test_source: str, expected_result: Any):
+def test_parse(test_source: str, expected_result: object):
     tree = inline_import.parse(test_source, mode="eval")
     code = compile(tree, "<string>", "eval")
     result = eval(code)
@@ -52,7 +49,7 @@ def test_parse(test_source: str, expected_result: Any):
         ("f'{value = !r:20}'", "value = 'Here I am'         "),
     ],
 )
-def test_regular_fstring(test_fstring: str, expected_result: Any):
+def test_regular_fstring(test_fstring: str, expected_result: object):
     globals_ = {"value": "Here I am"}
 
     tree = inline_import.parse(test_fstring, mode="eval")
@@ -164,13 +161,13 @@ def test_kwargs():
 @pytest.mark.parametrize(
     ("test_source", "annotation_var"),
     [
-        ("def test_func() -> typing!.Any: pass", "return"),
-        ("def test_func(x: typing!.Any): pass", "x"),
-        ("def test_func(x: typing!.Any = 1): pass", "x"),
+        ("def test_func() -> typing!.Annotated: pass", "return"),
+        ("def test_func(x: typing!.Annotated): pass", "x"),
+        ("def test_func(x: typing!.Annotated = 1): pass", "x"),
     ],
 )
 def test_typehint_conversion(test_source: str, annotation_var: str):
-    globals_: dict[str, Any] = {}
+    globals_: dict[str, object] = {}
 
     tree = inline_import.parse(test_source)
     code = compile(tree, "<string>", "exec")
@@ -178,7 +175,7 @@ def test_typehint_conversion(test_source: str, annotation_var: str):
 
     test_func = globals_["test_func"]
 
-    assert test_func.__annotations__[annotation_var] is Any
+    assert test_func.__annotations__[annotation_var] is Annotated
 
 
 @pytest.mark.parametrize(

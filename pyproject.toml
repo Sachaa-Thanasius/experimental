@@ -59,12 +59,15 @@ extra-dependencies = ["covdefaults"]
 
 [tool.pytest.ini_options]
 pythonpath = "src"
-addopts = ["--strict-markers", "--strict-config"] # "--import-mode=importlib", 
+addopts = [
+    # "--import-mode=importlib", # This breaks a few pytest features currently.
+    "--strict-markers",
+    "--strict-config",
+]
 
 [tool.coverage.run]
 plugins = ["covdefaults"]
 source = ["__experimental__", "tests"]
-omit = ["tests/sample_late_bound_arg.py"]
 
 [tool.coverage.paths]
 __experimental__ = ["src"]
@@ -73,6 +76,7 @@ __experimental__ = ["src"]
 # It's a work in progress.
 fail_under = 70
 exclude_lines = ["^\\s*(?:el)?if TYPE_CHECKING:$"]
+
 
 # ---- Linting config
 
@@ -122,7 +126,7 @@ ignore = [
     "ANN101", # Type of Self for self is usually implicit and/or known by the type-checker.
     "ANN102", # Type of type[Self] for cls is usually implicit and/or known by the type-checker.
     "ANN204", # Special method return types are usually implicit and/or known by type checker.
-    "ANN401", # Any is needed for some parameters.
+    # "ANN401", # Any is needed for some parameters.
     "UP038",  # isinstance performs better with tuples than unions.
     "PT001",  # pytest recommends against empty parentheses on pytest.fixture.
     "PYI036", # Bug with annotations for __exit__.

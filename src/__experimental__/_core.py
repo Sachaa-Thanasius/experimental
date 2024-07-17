@@ -1,10 +1,6 @@
-"""The main residence of the feature objects and overarching import logic.
-
-TODO: Figure out how to do one pass instead of multiple for the token and AST transformations.
-See pyupgrade for inspiration.
-TODO: Switch to working on a list of tokens instead of a generator. That'll remove some complexity and allow bigger
-transformations.
-"""
+"""The main residence of the feature objects and overarching import logic."""
+# TODO: Figure out if one pass can be done instead of multiple for the token and AST transformations. See pyupgrade for
+#       inspiration.
 
 import ast
 import importlib.machinery
@@ -18,7 +14,7 @@ from importlib._bootstrap import _call_with_frames_removed  # type: ignore # Has
 from io import BytesIO
 from typing import TYPE_CHECKING, ClassVar, TypeAlias
 
-from __experimental__._token_helpers import get_imported_experimental_flags
+from __experimental__._misc import get_imported_experimental_flags
 from __experimental__._typing_compat import ReadableBuffer, Self
 
 
@@ -170,7 +166,7 @@ def uninstall_experimental_import_hook() -> None:
 
 
 def _import_features() -> None:
-    """Import everything in __experimental__._features. The features will register themselves on import."""
+    """Import all features, which will register themselves on import."""
 
     import pkgutil
 

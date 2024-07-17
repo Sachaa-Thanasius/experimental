@@ -1,59 +1,51 @@
-"""An implementation of late-bound function argument defaults (PEP 671) in "pure" Python."""
+"""An implementation of late-bound function argument defaults (PEP 671) in pure Python."""
 
 import ast
 import tokenize
-from collections.abc import Generator, Iterable
 from io import BytesIO
 from itertools import starmap
-from typing import TypeGuard, final
+from typing import TypeGuard
 
+from __experimental__._ast_helpers import find_import_spot
 from __experimental__._core import _ExperimentalFeature, _Transformers
 from __experimental__._misc import copy_annotations
-from __experimental__._peekable import Peekable
 from __experimental__._token_helpers import offset_line_horizontal
-from __experimental__._typing_compat import ReadableBuffer, override
+from __experimental__._typing_compat import ReadableBuffer
 
 
-__all__ = ("transform_tokens", "transform_source", "transform_ast", "parse", "FEATURE")
+_MARKER = "_DEFER_MARKER"
 
 
-@final
-class DEFER_MARKER:
+class DeferredExpr:
     __slots__ = ("expr",)
 
     def __init__(self, expr: str, /) -> None:
         self.expr = expr
 
-    @override
     def __repr__(self, /) -> str:
         return f"{type(self).__name__}({self.expr!r})"
 
 
-def transform_tokens(tokens: Iterable[tokenize.TokenInfo]) -> Generator[tokenize.TokenInfo]:
+def transform_tokens(tokens: list[tokenize.TokenInfo]) -> list[tokenize.TokenInfo]:
     """Replace `=>` with `= _DEFER_MARKER` in the token stream."""
 
-    peekable_tokens_iter = Peekable(tokens)
-    for tok in peekable_tokens_iter:
-        if (
-            tok.exact_type == tokenize.EQUAL
-            and peekable_tokens_iter.has_more()
-            and (peek := peekable_tokens_iter.peek()).exact_type == tokenize.GREATER
-            and tok.end == peek.start  # "=>" should be connected with no space in between.
-        ):
-            yield tok
+    for i in reversed(range(len(tokens))):
+        tok = tokens[i]
 
-            # Replace this next token with a marker.
-            next(peekable_tokens_iter)
-            start_row, start_col = peek.start
-            new_start = (start_row, start_col + 1)
-            new_end = (start_row, start_col + 15)
-            yield tokenize.TokenInfo(tokenize.NAME, "_DEFER_MARKER", new_start, new_end, tok.line)
+        if tok.exact_type == tokenize.GREATER and i > 0:
+            peek_tok = tokens[i - 1]
 
-            # Fix the positions of the rest of the tokens on the same line.
-            yield from offset_line_horizontal(peekable_tokens_iter, start_row, 13)
+            # "=>" should be connected with no space in between.
+            if peek_tok.exact_type == tokenize.EQUAL and peek_tok.end == tok.start:
+                # Fix the positions of the rest of the tokens on the same line.
+                offset_line_horizontal(tokens, len(_MARKER), start_index=i + 1, line=tok.start[0])
 
-        else:
-            yield tok
+                # Replace the current ">" token with the marker, i.e. "=>" becomes "= _DEFER_MARKER".
+                new_start = (tok.start[0], tok.start[1] + 1)
+                new_end = (new_start[0], new_start[1] + len(_MARKER) + 1)
+                tokens[i] = tok._replace(type=tokenize.NAME, string=_MARKER, start=new_start, end=new_end)
+
+    return tokens
 
 
 def transform_source(source: str | ReadableBuffer) -> str:
@@ -64,8 +56,8 @@ def transform_source(source: str | ReadableBuffer) -> str:
     stream = BytesIO(source)
     encoding, _ = tokenize.detect_encoding(stream.readline)
     stream.seek(0)
-    tokens_gen = transform_tokens(tokenize.tokenize(stream.readline))
-    return tokenize.untokenize(tokens_gen).decode(encoding)
+    tokens_list = transform_tokens(list(tokenize.tokenize(stream.readline)))
+    return tokenize.untokenize(tokens_list).decode(encoding)
 
 
 class LateBoundDefaultTransformer(ast.NodeTransformer):
@@ -73,9 +65,9 @@ class LateBoundDefaultTransformer(ast.NodeTransformer):
 
     Notes
     -----
-    The defer markers will be replaced with `DEFER_MARKER` objects that contain a string form of the expression.
+    The defer markers will be replaced with `DeferredExpr` objects that contain a string form of the expression.
     Meanwhile, the actual expressions will be put in the functions and assigned to the relevant variables, guarded by
-    if conditions checking that the type of the given value is `DEFAULT_MARKER`.
+    if conditions checking that the type of the given value is `DeferredExpr`.
 
     An example of the conversion::
 
@@ -84,8 +76,8 @@ class LateBoundDefaultTransformer(ast.NodeTransformer):
             return [*a, b]
 
         # After
-        def example(a: list[int], b: int = @DEFER_MARKER("len(a)")):
-            if type(b) is @DEFER_MARKER:
+        def example(a: list[int], b: int = @DeferredExpr("len(a)")):
+            if type(b) is @DeferredExpr:
                 b = len(a)
             return [*a, b]
 
@@ -102,7 +94,7 @@ class LateBoundDefaultTransformer(ast.NodeTransformer):
 
     @staticmethod
     def _replace_marker_node(node: ast.Call, expr: ast.expr) -> ast.Call:
-        node.func = ast.Name("@DEFER_MARKER", ast.Load())
+        node.func = ast.Name("@DeferredExpr", ast.Load())
         node.args = [ast.Constant(ast.unparse(expr))]
         return node
 
@@ -112,7 +104,7 @@ class LateBoundDefaultTransformer(ast.NodeTransformer):
             test=ast.Compare(
                 left=ast.Call(func=ast.Name("type", ast.Load()), args=[ast.Name(name, ast.Load())], keywords=[]),
                 ops=[ast.Is()],
-                comparators=[ast.Name("@DEFER_MARKER", ast.Load())],
+                comparators=[ast.Name("@DeferredExpr", ast.Load())],
             ),
             body=[ast.Assign(targets=[ast.Name(name, ast.Store())], value=default)],
             orelse=[],
@@ -154,41 +146,27 @@ class LateBoundDefaultTransformer(ast.NodeTransformer):
         self._replace_late_bound_markers(node)
         return self.generic_visit(node)
 
-    @override
     def visit_FunctionDef(self, node: ast.FunctionDef) -> ast.AST:
         return self._visit_Func(node)
 
-    @override
     def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> ast.AST:
         return self._visit_Func(node)
 
-    @override
     def visit_Module(self, node: ast.Module) -> ast.AST:
         """Import the defer type and evaluation function so that the late binding-related symbols are valid."""
 
-        expect_docstring = True
-        position = 0
-        for sub_node in node.body:
-            match sub_node:
-                case ast.Expr(value=ast.Constant(value=str())) if expect_docstring:
-                    expect_docstring = False
-                case ast.ImportFrom(module="__future__", level=0):
-                    pass
-                case _:
-                    break
+        import_position = find_import_spot(node, after_modules={"__future__"})
 
-            position += 1
-
-        aliases = [ast.alias("DEFER_MARKER", "@DEFER_MARKER")]
+        aliases = [ast.alias("DeferredExpr", "@DeferredExpr")]
         imports = ast.ImportFrom(module="__experimental__._features.late_bound_arg_defaults", names=aliases, level=0)
-        node.body.insert(position, imports)
+        node.body.insert(import_position, imports)
 
         return self.generic_visit(node)
 
 
 def transform_ast(tree: ast.AST) -> ast.Module:
-    """Walk through an AST to a) turn the `_DEFER_MARKER(...)` expressions into `DEFER_MARKER` instantiations,
-    b) move the late-bound default expressions into their functions, and c) import `DEFER_MARKER`.
+    """Walk through an AST to turn the `_DEFER_MARKER(...)` expressions into `DeferredExpr` instantiations,
+    move the late-bound default expressions into their functions, and finally import `DeferredExpr`.
     """
 
     return ast.fix_missing_locations(LateBoundDefaultTransformer().visit(tree))
@@ -208,8 +186,8 @@ def parse(
 
     Notes
     -----
-    The runtime annotations for this method are a bit off; see `ast.parse`, the function this wraps, for details about the
-    actual signature.
+    The runtime annotations for this method are a bit off; see `ast.parse`, the function this wraps, for details about
+    the actual signature.
     """
 
     return transform_ast(

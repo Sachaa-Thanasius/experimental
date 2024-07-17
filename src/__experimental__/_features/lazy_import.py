@@ -1,4 +1,4 @@
-"""A partial implementation of lazy imports (PEP 690) with a context manager and module-wide in pure Python."""
+"""A partial implementation of lazy imports (PEP 690) for context-manager scope and module scope in pure Python."""
 
 import ast
 import contextlib
@@ -9,21 +9,16 @@ import sys
 import types
 from collections.abc import Generator, Sequence
 
+from __experimental__._ast_helpers import find_import_spot
 from __experimental__._core import _ExperimentalFeature, _Transformers
 from __experimental__._misc import copy_annotations
-from __experimental__._typing_compat import override
-
-
-__all__ = ("lazy_module_import", "transform_ast", "parse", "FEATURE")
 
 
 class _LazyFinder(importlib.abc.MetaPathFinder):
-    """A finder that delegates finding to the rest of the meta path and changes the found spec's loader.
-
-    It currently wraps the actual loader with `importlib.util.LazyLoader`.
+    """A finder that delegates finding to the rest of the meta path and wraps the found spec's loader with
+    `importlib.util.LazyLoader`.
     """
 
-    @override
     def find_spec(
         self,
         fullname: str,
@@ -41,8 +36,9 @@ class _LazyFinder(importlib.abc.MetaPathFinder):
             raise ModuleNotFoundError(msg, name=fullname)
 
         if spec.loader is None:
-            # Technically eager to say it's missing for sure here, but seems like the simplest path.
-            # References for regular behavior upon discovering a missing loader (CPython 3.11):
+            # It's technically eager to say here that the loader missing for sure, but that still seems like the
+            # simplest path.
+            # References for Python's normal behavior upon discovering a missing loader (CPython 3.11):
             # - importlib._bootstrap_external.PathFinder._get_spec
             # - importlib._bootstrap._load_unlocked
             # - importlib._bootstrap._exec
@@ -58,7 +54,7 @@ _LAZY_FINDER = _LazyFinder()
 
 
 def install_lazy_import_hook() -> None:
-    """Add a `_LazyFinder` singleton instance to `sys.meta_path`."""
+    """Add a `_LazyFinder` singleton instance to `sys.meta_path` if it's not already present."""
 
     if _LAZY_FINDER not in sys.meta_path:
         sys.meta_path.insert(0, _LAZY_FINDER)
@@ -102,20 +98,8 @@ class LazyImportTransformer(ast.NodeTransformer):
     __experimental__ imports.
     """
 
-    @override
     def visit_Module(self, node: ast.Module) -> ast.AST:
-        expect_docstring = True
-        position = 0
-        for sub_node in node.body:
-            match sub_node:
-                case ast.Expr(value=ast.Constant(value=str())) if expect_docstring:
-                    expect_docstring = False
-                case ast.ImportFrom(module="__future__" | "__experimental__", level=0):
-                    pass
-                case _:
-                    break
-
-            position += 1
+        import_position = find_import_spot(node)
 
         aliases = [
             ast.alias("install_lazy_import_hook", "@install_lazy_import_hook"),
@@ -123,14 +107,13 @@ class LazyImportTransformer(ast.NodeTransformer):
         ]
         imports = ast.ImportFrom(module="__experimental__._features.lazy_import", names=aliases, level=0)
         install_expr = ast.Expr(
-            value=ast.Call(func=ast.Name(id="@install_lazy_import_hook", ctx=ast.Load()), args=[], keywords=[]),
+            value=ast.Call(func=ast.Name("@install_lazy_import_hook", ctx=ast.Load()), args=[], keywords=[]),
         )
         uninstall_expr = ast.Expr(
-            value=ast.Call(func=ast.Name(id="@uninstall_lazy_import_hook", ctx=ast.Load()), args=[], keywords=[]),
+            value=ast.Call(func=ast.Name("@uninstall_lazy_import_hook", ctx=ast.Load()), args=[], keywords=[]),
         )
 
-        node.body.insert(position, imports)
-        node.body.insert(position + 1, install_expr)
+        node.body[import_position:import_position] = (imports, install_expr)
         node.body.append(uninstall_expr)
 
         return self.generic_visit(node)
@@ -154,8 +137,8 @@ def parse(
 
     Notes
     -----
-    The runtime annotations for this method are a bit off; see `ast.parse`, the function this wraps, for details about the
-    actual signature.
+    The runtime annotations for this method are a bit off; see `ast.parse`, the function this wraps, for details about
+    the actual signature.
     """
 
     return transform_ast(

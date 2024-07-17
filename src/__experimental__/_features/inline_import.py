@@ -2,103 +2,78 @@
 
 import ast
 import tokenize
-from collections.abc import Iterable
 from io import BytesIO
 
 from __experimental__._ast_helpers import collapse_plain_attribute_or_name
 from __experimental__._core import _ExperimentalFeature, _Transformers
 from __experimental__._misc import copy_annotations
-from __experimental__._peekable import Peekable
 from __experimental__._token_helpers import offset_line_horizontal, offset_token_horizontal
-from __experimental__._typing_compat import ReadableBuffer, override
+from __experimental__._typing_compat import ReadableBuffer
 
 
-__all__ = ("transform_tokens", "transform_source", "transform_ast", "parse", "FEATURE")
+_MARKER = "_IMPORTLIB_MARKER"
 
 
-def transform_tokens(tokens: Iterable[tokenize.TokenInfo]) -> list[tokenize.TokenInfo]:
+def transform_tokens(tokens: list[tokenize.TokenInfo]) -> list[tokenize.TokenInfo]:
     """Find the inline import expressions in a list of tokens and replace the relevant tokens to wrap the imported
     modules with `_IMPORTLIB_MARKER(...)`.
 
     Later, the AST transformer step will replace those with valid import expressions.
     """
 
-    # TODO: Somehow make this a generator and/or make signature consistent with other transform_tokens predicates.
-    new_tokens: list[tokenize.TokenInfo] = []
-
-    peekable_tokens_iter = Peekable(tokens)
-    for tok in peekable_tokens_iter:
+    for i in reversed(range(len(tokens))):
+        tok = tokens[i]
         # "!" is only an OP in >=3.12.
         if tok.type in {tokenize.OP, tokenize.ERRORTOKEN} and tok.string == "!":
-            has_invalid_syntax = False
-
             # Collect all name and attribute access-related tokens directly connected to the "!".
-            last_place = len(new_tokens)
+            has_invalid_syntax = False
             looking_for_name = True
 
-            for old_tok in reversed(new_tokens):
-                # TODO: Determine if this needs to be even stricter.
-                if old_tok.exact_type != (tokenize.NAME if looking_for_name else tokenize.DOT):
-                    has_invalid_syntax = (
-                        # The "!" was placed somewhere in a class definition, e.g. "class Fo!o: pass".
-                        (old_tok.exact_type == tokenize.NAME and old_tok.string == "class")
-                        # There's a name immediately following "!". Might be a f-string conversion flag
-                        # like "f'{thing!r}'" or just something invalid like "def fo!o(): pass".
-                        or (peekable_tokens_iter.has_more() and (peekable_tokens_iter.peek().type == tokenize.NAME))
-                    )
+            temp_i = i - 1
+            for temp_i in reversed(range(i)):
+                temp_tok = tokens[temp_i]
+                if temp_tok.exact_type != (tokenize.NAME if looking_for_name else tokenize.DOT):
+                    # Check if the "!" was placed somewhere in a class definition statement, e.g. "class Fo!o: pass".
+                    has_invalid_syntax = (temp_tok.exact_type == tokenize.NAME) and (temp_tok.string == "class")
+
+                    # There's a name immediately following "!". Might be a f-string conversion flag
+                    # like "f'{thing!r}'" or just something invalid like "def fo!o(): pass".
+                    if i < (len(tokens) - 1):
+                        peek_tok = tokens[i + 1]
+                        has_invalid_syntax = has_invalid_syntax or peek_tok.type == tokenize.NAME
+
                     break
-                last_place -= 1
+
                 looking_for_name = not looking_for_name
 
-            # The "!" is just by itself or in a bad spot. Let it error later if it's wrong.
-            # Also allows other token transformers to work with it without erroring early.
-            if has_invalid_syntax or last_place == len(new_tokens):
-                new_tokens.append(tok)
+            if has_invalid_syntax or (temp_i == (i - 1)):
+                # The "!" is by itself or in a bad spot. Let it error later if it's wrong.
+                # Erroring early would prevent other token transformers from potentially fixing the issue.
                 continue
 
-            # Insert "_IMPORTLIB_MARKER(" just before the inline import expression.
-            old_first = new_tokens[last_place]
-            old_f_row, old_f_col = old_first.start
+            # The start of the inline import expression.
+            marker_start_border = temp_i + 1
 
-            new_tokens[last_place:last_place] = [
-                old_first._replace(type=tokenize.NAME, string="_IMPORTLIB_MARKER", end=(old_f_row, old_f_col + 17)),
-                tokenize.TokenInfo(
-                    tokenize.OP,
-                    "(",
-                    (old_f_row, old_f_col + 17),
-                    (old_f_row, old_f_col + 18),
-                    old_first.line,
-                ),
-            ]
+            # Replace the end of the inline import expression, the current token, "!", with a closing parenthesis.
+            tokens[i] = tok._replace(type=tokenize.OP, string=")")
 
-            # Adjust the positions of the following tokens within the inline import expression.
-            new_tokens[last_place + 2 :] = (offset_token_horizontal(tok, 18) for tok in new_tokens[last_place + 2 :])
+            # Insert a call with the MARKER name just before the inline import expression.
+            imp_expr_first = tokens[marker_start_border]
+            ief_row, ief_col = imp_expr_first.start
 
-            # Add a closing parenthesis.
-            (end_row, end_col) = new_tokens[-1].end
-            line = new_tokens[-1].line
-            end_paren_token = tokenize.TokenInfo(tokenize.OP, ")", (end_row, end_col), (end_row, end_col + 1), line)
-            new_tokens.append(end_paren_token)
+            marker_tok = imp_expr_first._replace(
+                type=tokenize.NAME, string=_MARKER, end=(ief_row, ief_col + len(_MARKER))
+            )
+            open_paren_tok = offset_token_horizontal(
+                tokenize.TokenInfo(tokenize.OP, "(", (ief_row, ief_col), (ief_row, ief_col + 1), imp_expr_first.line),
+                len(_MARKER),
+            )
+            tokens[marker_start_border:marker_start_border] = (marker_tok, open_paren_tok)
 
-            # Fix the positions of the rest of the tokens on the same line.
-            fixed_line_tokens: list[tokenize.TokenInfo] = []
-            after_tok: tokenize.TokenInfo | None = None
+            # Adjust the positions of the tokens after the just inserted marker and parenthesis.
+            offset_line_horizontal(tokens, len(_MARKER) + 1, start_index=marker_start_border + 2, line=ief_row)
 
-            curr_row = end_paren_token.start[0]
-
-            fixed_line_tokens.extend(offset_line_horizontal(peekable_tokens_iter, curr_row, 18))
-            if fixed_line_tokens[-1].start[0] != curr_row:
-                after_tok = fixed_line_tokens.pop()
-
-            # Check the rest of the line for inline import expressions.
-            new_tokens.extend(transform_tokens(fixed_line_tokens))
-
-            if after_tok:
-                new_tokens.append(after_tok)
-        else:
-            new_tokens.append(tok)
-
-    return new_tokens
+    return tokens
 
 
 def transform_source(source: str | ReadableBuffer) -> str:
@@ -111,14 +86,13 @@ def transform_source(source: str | ReadableBuffer) -> str:
     stream = BytesIO(source)
     encoding, _ = tokenize.detect_encoding(stream.readline)
     stream.seek(0)
-    tokens_list = transform_tokens(tokenize.tokenize(stream.readline))
+    tokens_list = transform_tokens(list(tokenize.tokenize(stream.readline)))
     return tokenize.untokenize(tokens_list).decode(encoding)
 
 
 class InlineImportTransformer(ast.NodeTransformer):
     """An AST transformer that replaces `_IMPORTLIB_MARKER(...)` with `__import__("importlib").import_module(...)`."""
 
-    @override
     def visit_Call(self, node: ast.Call) -> ast.AST:
         """Replace the _IMPORTLIB_MARKER calls with a valid inline import expression."""
 
@@ -131,14 +105,16 @@ class InlineImportTransformer(ast.NodeTransformer):
                         keywords=[],
                     ),
                     attr="import_module",
-                    ctx=ast.Load(),
+                    ctx=arg.ctx,
                 )
 
                 try:
-                    node.args[0] = ast.Constant(value=collapse_plain_attribute_or_name(arg))
+                    identifier = collapse_plain_attribute_or_name(arg)
                 except TypeError:
                     msg = "Only names and attribute access (dot operator) can be within the inline import expression."
                     raise SyntaxError(msg) from None
+                else:
+                    node.args[0] = ast.Constant(value=identifier)
 
             case _:
                 pass
@@ -166,8 +142,8 @@ def parse(
 
     Notes
     -----
-    The runtime annotations for this method are a bit off; see `ast.parse`, the function this wraps, for details about the
-    actual signature.
+    The runtime annotations for this method are a bit off; see `ast.parse`, the function this wraps, for details about
+    the actual signature.
     """
 
     return transform_ast(

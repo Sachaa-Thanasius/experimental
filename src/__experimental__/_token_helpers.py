@@ -28,7 +28,7 @@ import enum
 import keyword
 import re
 import tokenize
-from collections.abc import Generator, Iterable
+from collections.abc import Generator
 
 
 __all__ = ("get_imported_experimental_flags", "offset_token_horizontal", "offset_line_horizontal")
@@ -70,7 +70,7 @@ TOKENIZE: tuple[tuple[TokenType, re.Pattern[str]], ...] = (
 _FROM_EXPERIMENTAL = "from __experimental__ import "
 
 
-def _tokenize_pre_code(source: str) -> Generator[tuple[TokenType, str], None, None]:
+def _tokenize_pre_code(source: str) -> Generator[tuple[TokenType, str]]:
     pos = 0
     while True:
         for tp, reg in TOKENIZE:
@@ -98,7 +98,7 @@ def get_imported_experimental_flags(source: str) -> set[str]:
 
 
 def offset_token_horizontal(tok: tokenize.TokenInfo, offset: int) -> tokenize.TokenInfo:
-    """Takes a token and returns a new token with the columns for start and end offset by a given amount."""
+    """Take a token and return a new token with the columns for start and end offset by a given amount."""
 
     start_row, start_col = tok.start
     end_row, end_col = tok.end
@@ -106,18 +106,31 @@ def offset_token_horizontal(tok: tokenize.TokenInfo, offset: int) -> tokenize.To
 
 
 def offset_line_horizontal(
-    tokens: Iterable[tokenize.TokenInfo],
-    line: int,
+    tokens: list[tokenize.TokenInfo],
     offset: int,
-) -> Generator[tokenize.TokenInfo]:
-    """Takes a iterable of tokens and offsets the tokens horizontally if they are on the given line.
+    *,
+    start_index: int = 0,
+    line: int,
+) -> None:
+    """Modify a list of tokens by offsetting some of the tokens horizontally while they are on the given line.
 
-    The last token returned might not be on the same line.
+    Parameters
+    ----------
+    tokens: list[tokenize.TokenInfo]
+        The list of tokens to modify.
+    offset: int
+        The amount to offset the tokens horizontally by.
+    start_index: int, default=0
+        Where in the list to start modifying from. Defaults to 0, meaning the entire list.
+    line: int
+        Which line number to offset tokens on.
+
+    Notes
+    -----
+    This modifies the list in place but does not change its length, so it should be safe to use during iteration.
     """
 
-    for tok in tokens:
-        if line != tok.start[0]:
-            yield tok
+    for i, tok in enumerate(tokens[start_index:], start=start_index):
+        if tok.start[0] != line:
             break
-
-        yield offset_token_horizontal(tok, offset)
+        tokens[i] = offset_token_horizontal(tok, offset)

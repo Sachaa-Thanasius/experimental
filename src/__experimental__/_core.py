@@ -13,23 +13,23 @@ import os
 import sys
 import tokenize
 import types
-from collections.abc import Callable, Iterable
+from collections.abc import Callable
 from importlib._bootstrap import _call_with_frames_removed  # type: ignore # Has to come from importlib, I think.
 from io import BytesIO
 from typing import TYPE_CHECKING, ClassVar, TypeAlias
 
 from __experimental__._token_helpers import get_imported_experimental_flags
-from __experimental__._typing_compat import ReadableBuffer, Self, override
+from __experimental__._typing_compat import ReadableBuffer, Self
 
 
 if TYPE_CHECKING:
     from typing import ParamSpec, Protocol, TypeVar
 
-    T = TypeVar("T")
-    P = ParamSpec("P")
+    _T = TypeVar("_T")
+    _P = ParamSpec("_P")
 
     class _CurryProtocol(Protocol):
-        def __call__(self, func: Callable[P, T], *args: P.args, **kwargs: P.kwargs) -> T: ...
+        def __call__(self, func: Callable[_P, _T], *args: _P.args, **kwargs: _P.kwargs) -> _T: ...
 
     # Hack to inform type-checker of annotations.
     _call_with_frames_removed: _CurryProtocol = _call_with_frames_removed  # noqa: PLW0127
@@ -39,7 +39,6 @@ if TYPE_CHECKING:
 StrPath: TypeAlias = str | os.PathLike[str]
 
 CompilableAST: TypeAlias = ast.Module | ast.Expression | ast.Interactive
-TokenStream: TypeAlias = Iterable[tokenize.TokenInfo]
 
 
 __all__ = ("install_experimental_import_hook", "uninstall_experimental_import_hook")
@@ -51,7 +50,7 @@ class _Transformers:
     def __init__(
         self,
         source_hook: Callable[[str], str] | None = None,
-        token_hook: Callable[[TokenStream], TokenStream] | None = None,
+        token_hook: Callable[[list[tokenize.TokenInfo]], list[tokenize.TokenInfo]] | None = None,
         ast_hook: Callable[[CompilableAST], CompilableAST] | None = None,
         parse: Callable[..., ast.Module] | None = None,
     ) -> None:
@@ -94,7 +93,6 @@ class _ExperimentalFeature:
         self.reference: str | None = reference
         self._registry[name] = self
 
-    @override
     def __repr__(self) -> str:
         maybe_ref = f", reference={self.reference!r}" if self.reference else ""
         return f"_ExperimentalFeature(name={self.name!r}, date_added={self.date_added!r}{maybe_ref})"
@@ -113,19 +111,19 @@ class _ExperimentalLoader(importlib.machinery.SourceFileLoader):
 
         # Get the feature names that the code imports from __experimental__.
         collected_flags = get_imported_experimental_flags(source)
-        features_to_activate = tuple(
+        requested_features = tuple(
             _ExperimentalFeature._registry[flag]
             for flag in collected_flags.intersection(_ExperimentalFeature._registry.keys())
         )
 
         # If no flags are set, do normal compilation.
-        if not features_to_activate:
+        if not requested_features:
             return _call_with_frames_removed(compile, data, path, "exec", dont_inherit=True, optimize=_optimize)
 
         # Apply token transformations.
-        tokens = tokenize.tokenize(BytesIO(data).readline)
+        tokens = list(tokenize.tokenize(BytesIO(data).readline))
 
-        for feature in features_to_activate:
+        for feature in requested_features:
             if feature.transformers.token_hook:
                 tokens = feature.transformers.token_hook(tokens)
 
@@ -135,7 +133,7 @@ class _ExperimentalLoader(importlib.machinery.SourceFileLoader):
         # Apply AST transformations.
         tree = _call_with_frames_removed(ast.parse, source, path, "exec")
 
-        for feature in features_to_activate:
+        for feature in requested_features:
             if feature.transformers.ast_hook:
                 tree = feature.transformers.ast_hook(tree)
 
@@ -153,6 +151,8 @@ _MODIFIED_SUPPORTED_FILE_LOADERS = [
 
 
 def install_experimental_import_hook() -> None:
+    """Replace the default FileFinder path hook with our custom one."""
+
     for i, hook in enumerate(sys.path_hooks):
         if "FileFinder.path_hook" in hook.__qualname__:
             sys.path_hooks[i] = new_hook = importlib.machinery.FileFinder.path_hook(*_MODIFIED_SUPPORTED_FILE_LOADERS)
@@ -161,6 +161,8 @@ def install_experimental_import_hook() -> None:
 
 
 def uninstall_experimental_import_hook() -> None:
+    """Replace our custom path hook, if it's in sys.path_hooks, with the original FileFinder one."""
+
     for i, hook in enumerate(sys.path_hooks):
         if "FileFinder.path_hook" in hook.__qualname__ and hasattr(hook, "_original_path_hook_for_FileFinder"):
             sys.path_hooks[i] = hook._original_path_hook_for_FileFinder  # type: ignore # Runtime attribute access.
@@ -168,6 +170,8 @@ def uninstall_experimental_import_hook() -> None:
 
 
 def _import_features() -> None:
+    """Import everything in __experimental__._features. The features will register themselves on import."""
+
     import pkgutil
 
     from __experimental__ import _features

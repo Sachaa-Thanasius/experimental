@@ -1,61 +1,27 @@
 """An implementation of eliding typing cast calls in pure Python."""
 
 import ast
-from collections import ChainMap
-from types import MappingProxyType
 
-from __experimental__._ast_helpers import compare_asts
+from __experimental__._ast_helpers import ScopeTracker, compare_asts
 from __experimental__._core import _ExperimentalFeature, _Transformers
 from __experimental__._misc import copy_annotations
-from __experimental__._typing_compat import override
 
 
-__all__ = ("transform_ast", "parse", "FEATURE")
-
-
-class CastElisionTransformer(ast.NodeTransformer):
+class CastElisionTransformer(ScopeTracker):
     """An AST transformer that removes calls to `typing.cast` or `typing_extensions.cast`.
 
     Reference for tracking scopes within an AST: https://stackoverflow.com/a/55834093
     """
 
-    typing_imports = frozenset({"typing", "typing_extensions"})
-
     def __init__(self) -> None:
-        self.scopes: ChainMap[str, str | None] = ChainMap()
+        super().__init__()
+        self.typing_imports = frozenset({"typing", "typing_extensions"})
         self.used_at: list[tuple[str, str, int]] = []
 
-    def _visit_Func(self, node: ast.AST) -> ast.AST:
-        self.scopes = self.scopes.new_child()
-        mod_node = self.generic_visit(node)
-        self.scopes = self.scopes.parents
-        return mod_node
-
-    @override
-    def visit_Lambda(self, node: ast.Lambda) -> ast.AST:
-        return self._visit_Func(node)
-
-    @override
-    def visit_FunctionDef(self, node: ast.FunctionDef) -> ast.AST:
-        return self._visit_Func(node)
-
-    @override
-    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> ast.AST:
-        return self._visit_Func(node)
-
-    @override
-    def visit_ClassDef(self, node: ast.ClassDef) -> ast.AST:
-        self.scopes = self.scopes.new_child(MappingProxyType({}))  # type: ignore
-        mod_node = self.generic_visit(node)
-        self.scopes = self.scopes.parents
-        return mod_node
-
-    @override
     def visit_Import(self, node: ast.Import) -> ast.AST:
         self.scopes.update({(a.asname or a.name): a.name for a in node.names if a.name in self.typing_imports})
         return self.generic_visit(node)
 
-    @override
     def visit_ImportFrom(self, node: ast.ImportFrom) -> ast.AST:
         source = node.module
 
@@ -64,7 +30,6 @@ class CastElisionTransformer(ast.NodeTransformer):
 
         return self.generic_visit(node)
 
-    @override
     def visit_Call(self, node: ast.Call) -> ast.AST:
         match node:
             case ast.Call(func=ast.Name(id=name), args=[_, right_side]) if imported_name := self.scopes.get(name):
@@ -82,7 +47,6 @@ class CastElisionTransformer(ast.NodeTransformer):
 
         return self.generic_visit(mod_node)
 
-    @override
     def visit_Assign(self, node: ast.Assign) -> ast.AST | None:
         match node:
             case ast.Assign(
@@ -123,8 +87,8 @@ def parse(
 
     Notes
     -----
-    The runtime annotations for this method are a bit off; see `ast.parse`, the function this wraps, for details about the
-    actual signature.
+    The runtime annotations for this method are a bit off; see `ast.parse`, the function this wraps, for details about
+    the actual signature.
     """
 
     return transform_ast(

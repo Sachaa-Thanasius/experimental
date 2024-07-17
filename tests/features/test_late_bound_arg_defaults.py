@@ -60,8 +60,8 @@ def test_transform_ast():
     assert isinstance(test_func, types.FunctionType)
     assert isinstance(test_func.__defaults__, tuple)
     assert test_func.__defaults__[0] == 1
-    assert isinstance(test_func.__defaults__[1], late_bind.DEFER_MARKER)
-    assert isinstance(test_func.__defaults__[2], late_bind.DEFER_MARKER)
+    assert isinstance(test_func.__defaults__[1], late_bind.DeferredExpr)
+    assert isinstance(test_func.__defaults__[2], late_bind.DeferredExpr)
 
 
 def test_transform_ast_with_docstring():

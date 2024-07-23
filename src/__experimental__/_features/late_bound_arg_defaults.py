@@ -9,8 +9,8 @@ from typing import TypeGuard
 from __experimental__._ast_helpers import find_import_spot
 from __experimental__._core import _ExperimentalFeature, _Transformers
 from __experimental__._misc import copy_annotations
-from __experimental__._token_helpers import offset_line_horizontal
-from __experimental__._typing_compat import ReadableBuffer
+from __experimental__._token_helpers import offset_line_horizontal, reverse_enumerate
+from __experimental__._typing_compat import Buffer as ReadableBuffer
 
 
 _MARKER = "_DEFER_MARKER"
@@ -29,9 +29,7 @@ class DeferredExpr:
 def transform_tokens(tokens: list[tokenize.TokenInfo]) -> list[tokenize.TokenInfo]:
     """Replace `=>` with `= _DEFER_MARKER` in the token stream."""
 
-    for i in reversed(range(len(tokens))):
-        tok = tokens[i]
-
+    for i, tok in reverse_enumerate(tokens):
         if tok.exact_type == tokenize.GREATER and i > 0:
             peek_tok = tokens[i - 1]
 

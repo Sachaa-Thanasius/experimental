@@ -4,18 +4,17 @@ import sys
 from typing import TYPE_CHECKING
 
 
-__all__ = ("ReadableBuffer", "Self")
+__all__ = ("Buffer", "Self")
 
 
 if sys.version_info >= (3, 12):  # pragma: >=3.12 cover
-    from collections.abc import Buffer as ReadableBuffer
-
+    from collections.abc import Buffer
 elif TYPE_CHECKING:
-    from typing_extensions import Buffer as ReadableBuffer
+    from typing_extensions import Buffer
 else:  # pragma: <3.12 cover
     from typing import TypeAlias
 
-    ReadableBuffer: TypeAlias = bytes | bytearray | memoryview
+    Buffer: TypeAlias = bytes | bytearray | memoryview
 
 
 if sys.version_info >= (3, 11):  # pragma: >=3.11 cover

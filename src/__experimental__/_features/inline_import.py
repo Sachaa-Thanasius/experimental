@@ -7,8 +7,8 @@ from io import BytesIO
 from __experimental__._ast_helpers import collapse_plain_attribute_or_name
 from __experimental__._core import _ExperimentalFeature, _Transformers
 from __experimental__._misc import copy_annotations
-from __experimental__._token_helpers import offset_line_horizontal, offset_token_horizontal
-from __experimental__._typing_compat import ReadableBuffer
+from __experimental__._token_helpers import offset_line_horizontal, offset_token_horizontal, reverse_enumerate
+from __experimental__._typing_compat import Buffer as ReadableBuffer
 
 
 _MARKER = "_IMPORTLIB_MARKER"
@@ -21,8 +21,7 @@ def transform_tokens(tokens: list[tokenize.TokenInfo]) -> list[tokenize.TokenInf
     Later, the AST transformer step will replace those with valid import expressions.
     """
 
-    for i in reversed(range(len(tokens))):
-        tok = tokens[i]
+    for i, tok in reverse_enumerate(tokens):
         # "!" is only an OP in >=3.12.
         if tok.type in {tokenize.OP, tokenize.ERRORTOKEN} and tok.string == "!":
             # Collect all name and attribute access-related tokens directly connected to the "!".
@@ -30,8 +29,7 @@ def transform_tokens(tokens: list[tokenize.TokenInfo]) -> list[tokenize.TokenInf
             looking_for_name = True
 
             temp_i = i - 1
-            for temp_i in reversed(range(i)):
-                temp_tok = tokens[temp_i]
+            for temp_i, temp_tok in reverse_enumerate(tokens, start=i - 1):  # noqa: B007
                 if temp_tok.exact_type != (tokenize.NAME if looking_for_name else tokenize.DOT):
                     # Check if the "!" was placed somewhere in a class definition statement, e.g. "class Fo!o: pass".
                     has_invalid_syntax = (temp_tok.exact_type == tokenize.NAME) and (temp_tok.string == "class")
@@ -57,10 +55,14 @@ def transform_tokens(tokens: list[tokenize.TokenInfo]) -> list[tokenize.TokenInf
             # Replace the end of the inline import expression, the current token, "!", with a closing parenthesis.
             tokens[i] = tok._replace(type=tokenize.OP, string=")")
 
-            # Insert a call with the MARKER name just before the inline import expression.
             imp_expr_first = tokens[marker_start_border]
             ief_row, ief_col = imp_expr_first.start
 
+            # Adjust positions of all tokens following the start of the inline import expression to make space for
+            # the MARKER and opening parenthesis of its call.
+            offset_line_horizontal(tokens, len(_MARKER) + 1, start_index=marker_start_border, line=ief_row)
+
+            # Insert a call with the MARKER name just before the inline import expression.
             marker_tok = imp_expr_first._replace(
                 type=tokenize.NAME, string=_MARKER, end=(ief_row, ief_col + len(_MARKER))
             )
@@ -69,9 +71,6 @@ def transform_tokens(tokens: list[tokenize.TokenInfo]) -> list[tokenize.TokenInf
                 len(_MARKER),
             )
             tokens[marker_start_border:marker_start_border] = (marker_tok, open_paren_tok)
-
-            # Adjust the positions of the tokens after the just inserted marker and parenthesis.
-            offset_line_horizontal(tokens, len(_MARKER) + 1, start_index=marker_start_border + 2, line=ief_row)
 
     return tokens
 

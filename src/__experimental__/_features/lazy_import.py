@@ -99,19 +99,14 @@ class LazyImportTransformer(ast.NodeTransformer):
     """
 
     def visit_Module(self, node: ast.Module) -> ast.AST:
-        import_position = find_import_spot(node)
+        install_name = "install_lazy_import_hook"
+        uninstall_name = "uninstall_lazy_import_hook"
 
-        aliases = [
-            ast.alias("install_lazy_import_hook", "@install_lazy_import_hook"),
-            ast.alias("uninstall_lazy_import_hook", "@uninstall_lazy_import_hook"),
-        ]
+        import_position = find_import_spot(node)
+        aliases = [ast.alias(name, f"@{name}") for name in (install_name, uninstall_name)]
         imports = ast.ImportFrom(module="__experimental__._features.lazy_import", names=aliases, level=0)
-        install_expr = ast.Expr(
-            value=ast.Call(func=ast.Name("@install_lazy_import_hook", ctx=ast.Load()), args=[], keywords=[]),
-        )
-        uninstall_expr = ast.Expr(
-            value=ast.Call(func=ast.Name("@uninstall_lazy_import_hook", ctx=ast.Load()), args=[], keywords=[]),
-        )
+        install_expr = ast.Expr(ast.Call(func=ast.Name(f"@{install_name}", ctx=ast.Load()), args=[], keywords=[]))
+        uninstall_expr = ast.Expr(ast.Call(func=ast.Name(f"@{uninstall_name}", ctx=ast.Load()), args=[], keywords=[]))
 
         node.body[import_position:import_position] = (imports, install_expr)
         node.body.append(uninstall_expr)

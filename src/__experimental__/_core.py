@@ -15,7 +15,7 @@ from io import BytesIO
 from typing import TYPE_CHECKING, ClassVar, TypeAlias
 
 from __experimental__._misc import get_imported_experimental_flags
-from __experimental__._typing_compat import ReadableBuffer, Self
+from __experimental__._typing_compat import Buffer as ReadableBuffer, Self
 
 
 if TYPE_CHECKING:
@@ -154,6 +154,7 @@ def install_experimental_import_hook() -> None:
             sys.path_hooks[i] = new_hook = importlib.machinery.FileFinder.path_hook(*_MODIFIED_SUPPORTED_FILE_LOADERS)
             new_hook._original_path_hook_for_FileFinder = hook  # type: ignore # Runtime attribute assignment.
             break
+    sys.path_importer_cache.clear()
 
 
 def uninstall_experimental_import_hook() -> None:
@@ -163,6 +164,7 @@ def uninstall_experimental_import_hook() -> None:
         if "FileFinder.path_hook" in hook.__qualname__ and hasattr(hook, "_original_path_hook_for_FileFinder"):
             sys.path_hooks[i] = hook._original_path_hook_for_FileFinder  # type: ignore # Runtime attribute access.
             break
+    sys.path_importer_cache.clear()
 
 
 def _import_features() -> None:

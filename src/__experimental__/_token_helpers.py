@@ -1,7 +1,12 @@
 import tokenize
+from collections.abc import Generator, Sequence
+from typing import TypeVar
 
 
-__all__ = ("offset_token_horizontal", "offset_line_horizontal")
+_T = TypeVar("_T")
+
+
+__all__ = ("offset_token_horizontal", "offset_line_horizontal", "reverse_enumerate")
 
 
 def offset_token_horizontal(tok: tokenize.TokenInfo, offset: int) -> tokenize.TokenInfo:
@@ -41,3 +46,21 @@ def offset_line_horizontal(
         if tok.start[0] != line:
             break
         tokens[i] = offset_token_horizontal(tok, offset)
+
+
+def reverse_enumerate(sequence: Sequence[_T], start: int = -1) -> Generator[tuple[int, _T]]:
+    """Yield index-value pairs from the given sequence, but in reverse. This generator defaults to starting at the end
+    of the sequence unless the start index is given.
+
+    Notes
+    -----
+    Sources of inspiration and code:
+    https://stackoverflow.com/questions/529424/traverse-a-list-in-reverse-order-in-python
+    https://github.com/asottile/tokenize-rt/blob/3edc03f25584af41f229b63280de557e1ec7d512/tokenize_rt.py#L116
+    """
+
+    if start == -1:
+        start = len(sequence) - 1
+
+    for i in range(start, -1, -1):
+        yield i, sequence[i]
